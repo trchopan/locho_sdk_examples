@@ -1,0 +1,29 @@
+{
+  "name": "locho-sdk-examples",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "workspaces": ["apps/api"],
+  "engines": { "node": ">=24.18.0 <25" },
+  "packageManager": "npm@11.16.0",
+  "scripts": {
+    "dev:api": "npm run dev --workspace @locho-examples/api",
+    "start:api": "npm run start --workspace @locho-examples/api",
+    "seed": "npm run seed --workspace @locho-examples/api",
+    "reset": "npm run reset --workspace @locho-examples/api",
+    "typecheck": "npm run typecheck --workspaces && tsc --noEmit -p tsconfig.json",
+    "build": "npm run build --workspaces",
+    "test": "npm run test --workspaces && npm run contract:check",
+    "contract:check": "node --import tsx scripts/check-contract.ts",
+    "smoke:locho": "node --import tsx scripts/smoke-locho.ts",
+    "check": "npm run typecheck && npm run build && npm test"
+  },
+  "devDependencies": {
+    "@apidevtools/swagger-parser": "13.1.0",
+    "@types/node": "24.19.2",
+    "ajv": "8.20.0",
+    "tsx": "4.23.15",
+    "typescript": "5.9.3",
+    "yaml": "2.9.1"
+  }
+}

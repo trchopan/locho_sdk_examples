@@ -1,0 +1,172 @@
+openapi: 3.0.3
+info:
+  title: Locho reference notes API
+  version: 1.0.0
+  description: |
+    API v1 shared by Flutter and browser applications. HTTP travels inside a
+    Locho TCP attachment; bearer tokens authenticate backend users separately.
+    UTF-8 JSON. Unknown fields are rejected. Passwords are never trimmed.
+    Email is trimmed/lowercased and limited to 254 UTF-8 bytes; passwords to 1024.
+    Titles are trimmed, 1–200 Unicode scalar values; bodies at most 16000 UTF-8
+    bytes. Reject C0 controls except body newline/carriage-return/tab and reject
+    lone UTF-16 surrogates. Request limit 64 KiB; notes cap 100; list limit 4 MiB.
+    Sessions expire after an absolute configurable lifetime (default 30 days).
+    Remember-device affects only client persistence. No redirects, cookies or renewal.
+    Updates are last-write-wins. Lists sort updatedAt descending, ID ascending.
+    Foreign and missing note IDs both return 404. 204 responses have no body.
+servers:
+  - url: http://127.0.0.1:8080
+    description: Direct development API; client attachment ports differ
+security:
+  - bearerSession: []
+paths:
+  /health:
+    get:
+      operationId: health
+      security: []
+      responses:
+        '200':
+          description: API identity, not a user session or an SDK startup probe
+          content:
+            application/json:
+              schema: { $ref: './schemas.json#/definitions/Health' }
+  /auth/login:
+    post:
+      operationId: login
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: './schemas.json#/definitions/LoginInput' }
+      responses:
+        '200':
+          description: New independent opaque session; Cache-Control no-store
+          content:
+            application/json:
+              schema: { $ref: './schemas.json#/definitions/Login' }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '413': { $ref: '#/components/responses/TooLarge' }
+        '429':
+          description: Login attempt limit; Retry-After is integer seconds
+          headers:
+            Retry-After: { schema: { type: integer, minimum: 1 } }
+          content:
+            application/json:
+              schema: { $ref: './schemas.json#/definitions/ApiError' }
+        '500': { $ref: '#/components/responses/InternalError' }
+  /api/me:
+    get:
+      operationId: currentSession
+      responses:
+        '200':
+          description: Validated current user/session; Cache-Control no-store
+          content:
+            application/json:
+              schema: { $ref: './schemas.json#/definitions/Me' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '500': { $ref: '#/components/responses/InternalError' }
+  /auth/logout:
+    post:
+      operationId: logout
+      responses:
+        '204': { description: Current session revoked }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '500': { $ref: '#/components/responses/InternalError' }
+  /api/notes:
+    get:
+      operationId: listNotes
+      responses:
+        '200':
+          description: Current user notes, latest update first; Cache-Control no-store
+          content:
+            application/json:
+              schema: { $ref: './schemas.json#/definitions/Notes' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '500': { $ref: '#/components/responses/InternalError' }
+    post:
+      operationId: createNote
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: './schemas.json#/definitions/CreateNote' }
+      responses:
+        '201':
+          description: Created note; Cache-Control no-store
+          content:
+            application/json:
+              schema: { $ref: './schemas.json#/definitions/NoteResult' }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '409':
+          description: Demonstration account note limit reached
+          content:
+            application/json:
+              schema: { $ref: './schemas.json#/definitions/ApiError' }
+        '413': { $ref: '#/components/responses/TooLarge' }
+        '500': { $ref: '#/components/responses/InternalError' }
+  /api/notes/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string, minLength: 1 }
+    patch:
+      operationId: updateNote
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: './schemas.json#/definitions/PatchNote' }
+      responses:
+        '200':
+          description: Updated note; Cache-Control no-store
+          content:
+            application/json:
+              schema: { $ref: './schemas.json#/definitions/NoteResult' }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '413': { $ref: '#/components/responses/TooLarge' }
+        '500': { $ref: '#/components/responses/InternalError' }
+    delete:
+      operationId: deleteNote
+      responses:
+        '204': { description: Note deleted }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/InternalError' }
+components:
+  securitySchemes:
+    bearerSession:
+      type: http
+      scheme: bearer
+      description: Opaque backend token, not the Locho capability
+  responses:
+    InvalidRequest:
+      description: Malformed JSON, invalid fields or content type
+      content:
+        application/json:
+          schema: { $ref: './schemas.json#/definitions/ApiError' }
+    Unauthorized:
+      description: Invalid credentials on login; invalid/missing/expired/revoked session elsewhere
+      content:
+        application/json:
+          schema: { $ref: './schemas.json#/definitions/ApiError' }
+    NotFound:
+      description: Unknown resource or another user note
+      content:
+        application/json:
+          schema: { $ref: './schemas.json#/definitions/ApiError' }
+    TooLarge:
+      description: Request exceeds 64 KiB
+      content:
+        application/json:
+          schema: { $ref: './schemas.json#/definitions/ApiError' }
+    InternalError:
+      description: Sanitized server failure
+      content:
+        application/json:
+          schema: { $ref: './schemas.json#/definitions/ApiError' }

@@ -1,0 +1,55 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "definitions": {
+    "Health": {
+      "type": "object", "additionalProperties": false, "required": ["service", "apiVersion"],
+      "properties": { "service": { "type": "string", "enum": ["locho-notes"] }, "apiVersion": { "type": "integer", "enum": [1] } }
+    },
+    "User": {
+      "type": "object", "additionalProperties": false, "required": ["id", "email"],
+      "properties": { "id": { "type": "string", "minLength": 1 }, "email": { "type": "string", "minLength": 1 } }
+    },
+    "LoginInput": {
+      "type": "object", "additionalProperties": false, "required": ["email", "password"],
+      "properties": { "email": { "type": "string", "minLength": 1, "maxLength": 254 }, "password": { "type": "string", "minLength": 1, "maxLength": 1024 } }
+    },
+    "Login": {
+      "type": "object", "additionalProperties": false, "required": ["token", "expiresAt", "user"],
+      "properties": { "token": { "type": "string", "minLength": 43 }, "expiresAt": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}T.*Z$" }, "user": { "$ref": "#/definitions/User" } }
+    },
+    "Me": {
+      "type": "object", "additionalProperties": false, "required": ["user", "expiresAt"],
+      "properties": { "user": { "$ref": "#/definitions/User" }, "expiresAt": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}T.*Z$" } }
+    },
+    "Note": {
+      "type": "object", "additionalProperties": false, "required": ["id", "title", "body", "createdAt", "updatedAt"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 }, "title": { "type": "string", "minLength": 1, "maxLength": 200 },
+        "body": { "type": "string", "maxLength": 16000 },
+        "createdAt": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}T.*Z$" }, "updatedAt": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}T.*Z$" }
+      }
+    },
+    "NoteResult": {
+      "type": "object", "additionalProperties": false, "required": ["note"], "properties": { "note": { "$ref": "#/definitions/Note" } }
+    },
+    "Notes": {
+      "type": "object", "additionalProperties": false, "required": ["notes"],
+      "properties": { "notes": { "type": "array", "maxItems": 100, "items": { "$ref": "#/definitions/Note" } } }
+    },
+    "CreateNote": {
+      "type": "object", "additionalProperties": false, "required": ["title", "body"],
+      "properties": { "title": { "type": "string", "minLength": 1, "maxLength": 200 }, "body": { "type": "string", "maxLength": 16000 } }
+    },
+    "PatchNote": {
+      "type": "object", "additionalProperties": false, "minProperties": 1,
+      "properties": { "title": { "type": "string", "minLength": 1, "maxLength": 200 }, "body": { "type": "string", "maxLength": 16000 } }
+    },
+    "ApiError": {
+      "type": "object", "additionalProperties": false, "required": ["error"],
+      "properties": { "error": {
+        "type": "object", "additionalProperties": false, "required": ["code", "message"],
+        "properties": { "code": { "type": "string", "enum": ["invalid_request", "invalid_credentials", "invalid_session", "not_found", "note_limit", "payload_too_large", "rate_limited", "internal_error"] }, "message": { "type": "string", "minLength": 1 } }
+      } }
+    }
+  }
+}

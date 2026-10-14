@@ -1,0 +1,16 @@
+{
+  "name": "@locho-examples/api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "start": "node dist/src/server.js",
+    "seed": "tsx src/seed.ts",
+    "reset": "tsx src/seed.ts --reset",
+    "typecheck": "tsc --noEmit",
+    "build": "tsc",
+    "test": "node --import tsx --test test/*.test.ts"
+  },
+  "dependencies": { "argon2": "0.45.1", "fastify": "5.12.7" }
+}
