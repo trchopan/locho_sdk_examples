@@ -1,0 +1,4 @@
+[[services]]
+name = "sample-api"
+type = "tcp"
+endpoint = "127.0.0.1:8080"
