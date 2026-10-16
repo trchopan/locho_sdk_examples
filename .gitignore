@@ -11,3 +11,7 @@ dist/
 coverage/
 .dart_tool/
 build/
+vendor/
+test-results/
+playwright-report/
+target/

@@ -1,0 +1,22 @@
+{
+  "name": "@locho-examples/web",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1",
+    "typecheck": "tsc --noEmit",
+    "build": "vite build",
+    "test": "node --import tsx --test test/*.test.ts"
+  },
+  "dependencies": {
+    "@locho/web": "file:../../vendor/locho-web-0.1.0-dev.1.tgz",
+    "react": "19.2.0",
+    "react-dom": "19.2.0"
+  },
+  "devDependencies": {
+    "@types/react": "19.2.2",
+    "@types/react-dom": "19.2.2",
+    "vite": "7.3.7"
+  }
+}

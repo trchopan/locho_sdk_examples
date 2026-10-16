@@ -1,5 +1,13 @@
 # Next development and handoffs
 
+## Current slice — memory-only browser notes
+
+apps/web now uses a checksum-pinned packaged browser SDK and canonical API v1 for
+pair/health/login/notes/logout. Local six-case production UI matrix and controller
+tests pass. Remembered sessions/storage/recovery and Flutter full app remain next.
+The GitHub remote and examples CI now exist. Historical slice table below describes
+the dependency sequence, not current completion of all acceptance gates.
+
 SDK team owns `locho`: Rust core/native adapter, Flutter/browser packages, tiny
 smoke apps, package/runtime checks. Samples team owns this repository: canonical
 OpenAPI, one backend, full apps, storage/lifecycle and deployment/application tests.

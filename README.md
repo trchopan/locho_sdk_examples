@@ -3,7 +3,8 @@
 Full Flutter and browser application demonstrations sharing one reference notes
 API. SDKs and tiny package smoke apps are maintained in the separate `locho`
 repository. This repository currently implements the backend/API-contract baseline;
-the full `apps/flutter` and `apps/web` applications follow SDK feasibility.
+the memory-only `apps/web` notes application now consumes a pinned SDK tarball.
+The full Flutter app and remembered-session/recovery slice remain follow-ups.
 
 ## Quick start
 
@@ -12,11 +13,16 @@ SQLite API is used directly; Argon2 is a native dependency with prebuilt artifac
 for common platforms and a compiler requirement if source compilation is needed.
 
 ```sh
+npm run sdk:setup
 npm ci
 npm run check
 npm run seed
 npm run dev:api
 ```
+
+For the browser workspace, run `npm run sdk:setup` **before** `npm ci` to download
+and checksum-verify its pinned SDK tarball (or set `LOCHO_SDK_ARCHIVE`). See
+[browser app setup and acceptance](apps/web/README.md).
 
 The API listens on `127.0.0.1:8080`. Check `http://127.0.0.1:8080/health` for
 `{"service":"locho-notes","apiVersion":1}`. For a compiled run:
@@ -56,10 +62,9 @@ In another terminal:
 locho share sample-api --config deploy/locho.toml
 ```
 
-The share command currently outputs an attach command containing the host ID and
-capability. Copy those into the Flutter SDK smoke app when available. Keep them
-private. Ticket-format output is a planned SDK feature, not an existing requirement
-to run this backend. The backend user token and Locho capability are independent.
+Ordinary share prints an attach command. For the browser app, add `--ticket` and
+paste the resulting credential into the app. Keep it private. The backend user
+token and Locho capability are independent.
 
 For a local CLI check, run the generated attach command and request
 `http://127.0.0.1:8765/health`. Across networks, use the SDK loopback port returned
@@ -99,4 +104,5 @@ OpenAPI validation and fixture-schema checks. Tests cover sessions, expiry,
 revocation, two-user isolation, Unicode/byte limits, malformed requests, persistence,
 safe diagnostics and a real HTTP listener. They use temporary/in-memory databases.
 
-This repository is local-first; no GitHub remote or publication is configured yet.
+GitHub: https://github.com/trchopan/locho_sdk_examples. CI checks API/contracts,
+controller tests and production browser UI against the pinned packaged SDK/host.

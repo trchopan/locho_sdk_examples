@@ -3,10 +3,18 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "workspaces": ["apps/api"],
-  "engines": { "node": ">=24.18.0 <25" },
+  "workspaces": [
+    "apps/api",
+    "apps/web"
+  ],
+  "engines": {
+    "node": ">=24.18.0 <25"
+  },
   "packageManager": "npm@11.16.0",
   "scripts": {
+    "sdk:setup": "node scripts/setup-browser-sdk.mjs",
+    "dev:web": "npm run dev --workspace @locho-examples/web",
+    "test:browser": "playwright test",
     "dev:api": "npm run dev --workspace @locho-examples/api",
     "start:api": "npm run start --workspace @locho-examples/api",
     "seed": "npm run seed --workspace @locho-examples/api",
@@ -20,6 +28,7 @@
   },
   "devDependencies": {
     "@apidevtools/swagger-parser": "13.1.0",
+    "@playwright/test": "1.64.1",
     "@types/node": "24.19.2",
     "ajv": "8.20.0",
     "tsx": "4.23.15",
