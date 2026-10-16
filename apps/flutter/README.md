@@ -1,5 +1,28 @@
 # Flutter notes application
 
+## Reliability hardening — 2026-10-16
+
+The controller now uses injectable ticket/client/attachment/HTTP dependencies,
+with a separate production adapter for the pinned SDK. Deterministic tests cover
+late parse/create/attach/health/login results, restore-vs-pair, save-vs-forget,
+remember-off/deletion retry, repeated resume, terminal status, cleanup budgets,
+token scoping and note-editor clearing. HTTP requests including logout explicitly
+disable redirects. Logout invalidates pending work and removes local auth before
+the bounded revocation attempt. Storage updates show progress and failure/retry.
+
+Screens clear editor/password data on attachment/user invalidation and call shared
+async session close on disposal. Close suppresses late notifications/new starts,
+closes app HTTP clients and waits boundedly for SDK client/subscription cleanup.
+Default cleanup waits are at most 15 seconds each for client and subscription;
+pending storage completion is awaited for at most another 15 seconds on final close.
+Timeout does not forcibly stop an OS storage transaction or an uncooperative Future;
+generation/revision guards still discard obsolete results. The production SDK has
+its own startup/cleanup bounds. Physical suspension can halt all execution.
+
+Android debug/release notes acceptance was rerun successfully on the ARM64 emulator
+after this refactor. These checks add reliability evidence, not physical-device,
+network-transition, backup/uninstall or complete tap-driven UI acceptance.
+
 Standalone Android/iOS foreground notes app using the delivered `locho_flutter`
 source archive and the same API v1 as `apps/web`. No generated FRB imports or sibling
 SDK Rust sources are required. This is a demonstration, not a background service.

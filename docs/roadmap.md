@@ -1,17 +1,20 @@
 # Next development and handoffs
 
-## Current slice — remembered browser sessions and recovery
+## Current slice — Flutter ownership hardening
 
 Flutter notes app now consumes the checksum-pinned source archive with foreground
 pairing/login/CRUD and opt-in secure storage. Android debug/release controller/runtime
-journey passes on the ARM64 16 KiB emulator. iOS compilation CI, physical mobile,
+journey passes on the ARM64 16 KiB emulator. Hosted iOS compilation also passes;
+physical mobile,
 network/storage acceptance, deployment and full tap-driven app tests remain gates.
 
 apps/web uses a checksum-pinned packaged SDK and API v1 for pair/health/login/CRUD.
 Opt-in IndexedDB storage, validated restore, remember-off deletion, forget races,
 revoked tokens, storage failure and page-event ownership now pass 18 production UI
 tests and 11 controller tests locally. SDK status subscriptions and actual mobile/
-BFCache/network/deployment evidence remain open. Flutter full app is the next major slice.
+BFCache/network/deployment evidence remain open. Flutter full app is implemented;
+ownership hardening adds injectable dependencies and deterministic race/cleanup
+tests before broader JSON failure acceptance and SDK status-subscription work.
 The GitHub remote and examples CI now exist. Historical slice table below describes
 the dependency sequence, not current completion of all acceptance gates.
 

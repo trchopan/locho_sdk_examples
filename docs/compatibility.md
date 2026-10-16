@@ -16,7 +16,8 @@
 Browser app now passes the memory-only production UI journey on local Chromium,
 Firefox and WebKit through public N0 using the pinned SDK tarball. Host CI builds
 the same 4f8aa20 revision. Flutter SDK source archives/external Android/iOS builds
-exist in Locho PR #95; the standalone Flutter notes application is not implemented.
+exist in Locho PR #95; the standalone Flutter notes application is implemented in
+examples PR #3 with hosted Android/iOS builds and Android emulator runtime evidence.
 Opt-in IndexedDB sessions and page-event restoration now pass the 18-case local
 browser matrix; 11 controller tests exercise storage/recovery races and policy.
 Flutter notes debug/release runtime acceptance passes on Android 17/API 37 ARM64

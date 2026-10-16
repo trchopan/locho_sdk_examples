@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:http/http.dart' as http;
 import 'package:locho_flutter/locho_flutter.dart';
+import 'transport.dart';
 
 abstract interface class Credentials {
   Future<String?> read();
@@ -29,23 +30,55 @@ class Obsolete implements Exception {}
 
 class NotesSession extends ChangeNotifier {
   final Credentials storage;
-  NotesSession(this.storage);
+  final SessionDependencies dependencies;
+  NotesSession(this.storage, {SessionDependencies? dependencies})
+    : dependencies = dependencies ?? SessionDependencies.native();
   String phase = 'unpaired', message = '', storageError = '', label = '';
   bool busy = false, remember = false;
+  bool storageBusy = false;
   List<Map<String, dynamic>> notes = [];
   Map<String, dynamic>? user;
-  LochoTicket? _ticket;
+  Pairing? _ticket;
   String? _scope, _token;
-  LochoClient? _client;
-  LochoAttachment? _attachment;
+  TunnelClient? _client;
+  Attachment? _attachment;
   http.Client? _http;
-  StreamSubscription<LochoStatus>? _watch;
+  StreamSubscription<LochoState>? _watch;
   int _generation = 0, _storageRevision = 0;
   bool _desired = false, _suspended = false, _recovering = false;
   Future<void> _closing = Future.value(), _saving = Future.value();
-  void changed() => notifyListeners();
+  bool _disposed = false;
+  int editorRevision = 0;
+  Future<void>? _shutdown;
+  final Set<http.Client> _revocations = {};
+  void changed() {
+    if (!_disposed) notifyListeners();
+  }
+
   void current(int g) {
-    if (g != _generation) throw Obsolete();
+    if (_disposed || g != _generation) throw Obsolete();
+  }
+
+  Future<void> _cleanup(
+    TunnelClient? client,
+    StreamSubscription<LochoState>? watch,
+  ) async {
+    // Client close ends the pinned SDK's async status generator before cancellation.
+    bool failed = false;
+    try {
+      await client?.close().timeout(dependencies.cleanupTimeout);
+    } catch (_) {
+      failed = true;
+    }
+    try {
+      await watch?.cancel().timeout(dependencies.cleanupTimeout);
+    } catch (_) {
+      failed = true;
+    }
+    if (failed && !_disposed) {
+      message = 'Cleanup could not be confirmed within its budget.';
+      changed();
+    }
   }
 
   String? get localBase => _attachment?.httpBaseUri.toString();
@@ -57,17 +90,17 @@ class NotesSession extends ChangeNotifier {
     _attachment = null;
     _http?.close();
     _http = null;
-    _closing = _closing
-        .then((_) async {
-          if (closeClient) await client?.close();
-          await watch?.cancel();
-        })
-        .catchError((_) {});
+    _closing = _closing.then(
+      (_) => _cleanup(closeClient ? client : null, watch),
+    );
     return _generation;
   }
 
   Future<void> persist() async {
+    if (_disposed) return;
     final revision = ++_storageRevision;
+    storageBusy = true;
+    changed();
     String? record;
     if (remember && _ticket != null) {
       String encoded;
@@ -76,6 +109,7 @@ class NotesSession extends ChangeNotifier {
       } catch (_) {
         if (revision == _storageRevision) {
           storageError = 'Credentials could not be exported for storage.';
+          storageBusy = false;
           changed();
         }
         return;
@@ -100,17 +134,23 @@ class NotesSession extends ChangeNotifier {
         }
       }
       if (revision == _storageRevision) changed();
+      if (revision == _storageRevision) {
+        storageBusy = false;
+        changed();
+      }
     });
     await _saving;
   }
 
   Future<void> setRemember(bool value) async {
+    if (_disposed) return;
     remember = value;
     changed();
     await persist();
   }
 
   Future<void> restore() async {
+    if (_disposed) return;
     final g = _generation, revision = _storageRevision;
     try {
       final value = await storage.read();
@@ -118,7 +158,7 @@ class NotesSession extends ChangeNotifier {
       if (revision != _storageRevision || value == null) return;
       if (value.length > 20000) throw const FormatException();
       final record = jsonDecode(value) as Map<String, dynamic>;
-      final ticket = await LochoTicket.parse(record['ticket'] as String);
+      final ticket = await dependencies.parse(record['ticket'] as String);
       current(g);
       if (revision != _storageRevision) return;
       final scope = '${ticket.hostId}/${ticket.service}/${ticket.serviceType}';
@@ -148,6 +188,7 @@ class NotesSession extends ChangeNotifier {
   }
 
   Future<void> pair(String text) async {
+    if (_disposed || _suspended) return;
     final g = invalidate();
     busy = true;
     phase = 'connecting';
@@ -156,7 +197,7 @@ class NotesSession extends ChangeNotifier {
     message = '';
     changed();
     try {
-      final ticket = await LochoTicket.parse(text.trim());
+      final ticket = await dependencies.parse(text.trim());
       current(g);
       await connectTicket(ticket);
     } catch (_) {
@@ -169,8 +210,8 @@ class NotesSession extends ChangeNotifier {
     }
   }
 
-  Future<void> connectTicket(LochoTicket ticket) async {
-    if (_suspended) return;
+  Future<void> connectTicket(Pairing ticket) async {
+    if (_suspended || _disposed) return;
     final g = invalidate();
     _desired = true;
     busy = true;
@@ -179,11 +220,14 @@ class NotesSession extends ChangeNotifier {
     user = null;
     message = '';
     changed();
-    LochoClient? client;
+    TunnelClient? client;
     try {
       if (ticket.serviceType != 'tcp') throw const FormatException();
       final scope = '${ticket.hostId}/${ticket.service}/${ticket.serviceType}';
-      if (_scope != scope) _token = null;
+      if (_scope != scope) {
+        _token = null;
+        editorRevision++;
+      }
       _ticket = ticket;
       _scope = scope;
       label = '${ticket.service} · ${ticket.hostId.substring(0, 12)}';
@@ -191,13 +235,13 @@ class NotesSession extends ChangeNotifier {
       current(g);
       await _closing;
       current(g);
-      client = await LochoClient.create();
+      client = await dependencies.create();
       current(g);
       _client = client;
-      final attachment = await client.attach(ticket: ticket);
+      final attachment = await client.attach(ticket);
       current(g);
       _attachment = attachment;
-      _http = http.Client();
+      _http = dependencies.httpClient();
       phase = 'checking';
       changed();
       final health = await call('/health', g, auth: false);
@@ -216,27 +260,39 @@ class NotesSession extends ChangeNotifier {
       current(g);
       phase = _token == null ? 'login' : 'notes';
       busy = false;
-      _watch = attachment.statuses.listen((status) {
-        if (g != _generation || busy || _suspended) return;
-        if (status.state == LochoState.reconnecting) {
-          _recovering = true;
-          phase = 'disconnected';
-          notes = [];
-          user = null;
-          message = 'Reconnecting; requests are not replayed.';
-          changed();
-        } else if (_recovering && status.state == LochoState.connected) {
-          _recovering = false;
-          unawaited(reconnect());
-        }
-      }, onError: (_) {});
+      _watch = attachment.states.listen(
+        (status) {
+          if (g != _generation || _disposed || _suspended) return;
+          if ([LochoState.failed, LochoState.closed].contains(status)) {
+            disconnect();
+            message =
+                'Transport stopped. Credentials retained; reconnect explicitly.';
+            changed();
+            return;
+          }
+          if (status == LochoState.reconnecting) {
+            _recovering = true;
+            phase = 'disconnected';
+            notes = [];
+            user = null;
+            message = 'Reconnecting; requests are not replayed.';
+            changed();
+          } else if (_recovering && status == LochoState.connected && !busy) {
+            _recovering = false;
+            unawaited(reconnect());
+          }
+        },
+        onError: (_) {
+          if (g == _generation) {
+            disconnect();
+            message = 'Transport status unavailable. Reconnect explicitly.';
+            changed();
+          }
+        },
+      );
       changed();
     } catch (_) {
-      try {
-        await client?.close();
-      } catch (_) {
-        /* retain sanitized startup error */
-      }
+      await _cleanup(client, null);
       if (g == _generation) {
         _client = null;
         _http?.close();
@@ -260,13 +316,14 @@ class NotesSession extends ChangeNotifier {
     final attachment = _attachment, api = _http;
     if (attachment == null || api == null) throw StateError('disconnected');
     final abort = Completer<void>();
-    final timer = Timer(const Duration(seconds: 15), () => abort.complete());
+    final timer = Timer(dependencies.requestTimeout, () => abort.complete());
     try {
       final request = http.AbortableRequest(
         method,
         attachment.httpBaseUri.resolve(path),
         abortTrigger: abort.future,
       );
+      request.followRedirects = false;
       if (auth && _token != null) {
         request.headers['Authorization'] = 'Bearer $_token';
       }
@@ -288,6 +345,7 @@ class NotesSession extends ChangeNotifier {
       if (response.statusCode < 200 || response.statusCode >= 300) {
         if (auth && response.statusCode == 401) {
           _token = null;
+          editorRevision++;
           user = null;
           notes = [];
           phase = 'login';
@@ -307,7 +365,7 @@ class NotesSession extends ChangeNotifier {
     Future<void> Function(int) run, {
     bool mutation = false,
   }) async {
-    if (busy) return;
+    if (busy || _disposed || _suspended) return;
     final g = _generation;
     busy = true;
     message = '';
@@ -342,6 +400,7 @@ class NotesSession extends ChangeNotifier {
     if (data['token'] is! String || data['user'] is! Map) {
       throw const FormatException();
     }
+    if (user?['id'] != data['user']['id']) editorRevision++;
     _token = data['token'];
     user = Map<String, dynamic>.from(data['user']);
     await persist();
@@ -393,6 +452,7 @@ class NotesSession extends ChangeNotifier {
   }
 
   void disconnect({bool preserveIntent = false}) {
+    if (_disposed) return;
     if (!preserveIntent) _desired = false;
     invalidate();
     busy = false;
@@ -408,11 +468,16 @@ class NotesSession extends ChangeNotifier {
   }
 
   Future<void> resume() async {
+    if (_disposed) return;
     _suspended = false;
-    if (_desired && _ticket != null && !busy) await reconnect();
+    if (_desired && _ticket != null && !busy && _client == null) {
+      await reconnect();
+    }
   }
 
   Future<void> forget() async {
+    if (_disposed) return;
+    editorRevision++;
     _desired = false;
     remember = false;
     invalidate();
@@ -429,7 +494,8 @@ class NotesSession extends ChangeNotifier {
   }
 
   Future<void> logout() async {
-    if (busy) return;
+    if (_disposed) return;
+    editorRevision++;
     final ticket = _ticket;
     final client = _client;
     final attachment = _attachment;
@@ -446,24 +512,26 @@ class NotesSession extends ChangeNotifier {
     changed();
     final saving = persist();
     bool revoked = false;
-    final revocation = http.Client();
+    final revocation = dependencies.httpClient();
+    _revocations.add(revocation);
     try {
       if (token != null && attachment != null && client != null) {
         // Retain only this old client for the bounded revocation attempt.
+        final request = http.AbortableRequest(
+          'POST',
+          attachment.httpBaseUri.resolve('/auth/logout'),
+        )..followRedirects = false;
+        request.headers['Authorization'] = 'Bearer $token';
         final response = await revocation
-            .post(
-              attachment.httpBaseUri.resolve('/auth/logout'),
-              headers: {'Authorization': 'Bearer $token'},
-            )
-            .timeout(const Duration(seconds: 15));
+            .send(request)
+            .timeout(dependencies.requestTimeout);
         revoked = response.statusCode == 204;
       }
     } catch (_) {
     } finally {
       revocation.close();
-      try {
-        await client?.close();
-      } catch (_) {}
+      _revocations.remove(revocation);
+      await _cleanup(client, null);
     }
     await saving;
     if (g != _generation) return;
@@ -472,5 +540,28 @@ class NotesSession extends ChangeNotifier {
         ? 'Logged out.'
         : 'Local token removed. Server revocation unconfirmed.';
     changed();
+  }
+
+  Future<void> close() => _shutdown ??= _close();
+  Future<void> _close() async {
+    _desired = false;
+    invalidate();
+    _disposed = true;
+    _storageRevision++;
+    for (final client in _revocations) {
+      client.close();
+    }
+    await _closing;
+    try {
+      await _saving.timeout(dependencies.cleanupTimeout);
+    } catch (_) {
+      /* OS storage may be unavailable. */
+    }
+  }
+
+  @override
+  void dispose() {
+    unawaited(close());
+    super.dispose();
   }
 }
