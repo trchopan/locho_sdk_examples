@@ -1,5 +1,12 @@
 # Next development and handoffs
 
+## Streaming slice 1 — authenticated backend events
+
+API v1 adds /api/events (OpenAPI 1.1.0): per-user committed note invalidations,
+bounded admission/backpressure, heartbeats and expiry/revocation cleanup. Live HTTP
+tests pass; see events.md. Browser streaming SDK is next, then event consumers in
+both apps. Current buffered browser fetch is unsuitable for infinite SSE bodies.
+
 ## Deployment handoff
 
 Private Compose API/Locho topology, separate Caddy static HTTPS hosting, verified

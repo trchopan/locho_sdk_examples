@@ -30,6 +30,9 @@ jobs:
       - uses: dtolnay/rust-toolchain@1.96.0
       - run: cargo build --locked --release --bin locho
         working-directory: target/locho
+      - run: npm run smoke:locho
+        env:
+          LOCHO_BINARY: ${{ github.workspace }}/target/locho/target/release/locho
       - run: npx playwright install --with-deps chromium firefox webkit
       - run: npm run test:browser
         env:
