@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import net from 'node:net';
 import dgram from 'node:dgram';
+import assert from 'node:assert/strict';
 import { createApp, addUser } from '../apps/api/src/app.js';
 
 const binary = process.env.LOCHO_BINARY;
@@ -61,11 +62,32 @@ try {
   if (login.status !== 200) throw new Error('Login through tunnel failed');
   const { token } = await login.json();
   const headers = { 'content-type': 'application/json', authorization: `Bearer ${token}` };
+  const events = await healthFetch(`${base}/api/events`, { headers });
+  assert.equal(events.status, 200);
+  assert.match(events.headers.get('content-type')!, /^text\/event-stream/);
+  const reader = events.body!.getReader();
+  let buffered = '';
+  async function frame(): Promise<string> {
+    while (!buffered.includes('\n\n')) {
+      const { done, value } = await reader.read();
+      if (done) throw new Error('Event stream ended before invalidation');
+      buffered += new TextDecoder().decode(value);
+    }
+    const index = buffered.indexOf('\n\n');
+    const result = buffered.slice(0, index); buffered = buffered.slice(index + 2);
+    return result;
+  }
+  assert.equal(await frame(), ': connected');
   const created = await healthFetch(`${base}/api/notes`, { method: 'POST', headers, body: JSON.stringify({ title: 'Tunnel smoke', body: 'Exact body' }) });
   if (created.status !== 201) throw new Error('Create through tunnel failed');
+  const id = (await created.json()).note.id;
+  let event: string;
+  do { event = await frame(); } while (event.startsWith(':'));
+  assert.equal(event, `event: note.changed\ndata: ${JSON.stringify({ operation: 'created', noteId: id })}`);
+  await reader.cancel();
   const notes = await healthFetch(`${base}/api/notes`, { headers });
   if (notes.status !== 200 || (await notes.json()).notes[0].body !== 'Exact body') throw new Error('List through tunnel failed');
-  console.log('Real Locho TCP tunnel health/login/notes smoke passed.');
+  console.log('Real Locho TCP tunnel health/login/notes/incremental SSE smoke passed.');
 } finally {
   for (const child of processes.reverse()) {
     if (child.exitCode !== null) continue;

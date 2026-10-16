@@ -4,6 +4,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { readFileSync } from 'node:fs';
 import { openDatabase } from './database.js';
 import { hashPassword, verifyPassword } from './password.js';
+import { NoteEvents } from './events.js';
 
 // Same schemas referenced by OpenAPI. Resolve from source and compiled dist paths.
 const schemas = JSON.parse(readFileSync(new URL(
@@ -21,6 +22,8 @@ export type AppOptions = {
   loginWindowMs?: number;
   clock?: () => number;
   logger?: FastifyServerOptions['logger'];
+  /** Shorter interval for deterministic tests; maximum/default 30 seconds. */
+  eventsTickMs?: number;
 };
 
 export class ApiFailure extends Error {
@@ -68,7 +71,11 @@ export async function createApp(options: AppOptions = {}) {
   }
   const dummyHash = await hashPassword(randomBytes(32).toString('base64url'));
   const db = openDatabase(options.databasePath ?? ':memory:');
+  const events = new NoteEvents((hash) => Boolean(db.prepare(
+    'SELECT 1 FROM sessions WHERE token_hash = ? AND revoked_at IS NULL AND expires_at > ?',
+  ).get(hash, clock())), options.eventsTickMs);
   const app = Fastify({
+    forceCloseConnections: true,
     bodyLimit: 64 * 1024,
     logger: options.logger ?? false,
     logController: new LogController({ disableRequestLogging: true }),
@@ -110,6 +117,8 @@ export async function createApp(options: AppOptions = {}) {
   });
   app.setNotFoundHandler((_request, reply) => reply.code(404).send({ error: { code: 'not_found', message: 'Resource not found.' } }));
   app.addHook('onClose', async () => { db.close(); });
+  // Close streams before Fastify waits for active HTTP responses during shutdown.
+  app.addHook('preClose', async () => { events.close(); });
 
   function session(request: FastifyRequest): Session {
     const authorization = request.headers.authorization;
@@ -165,7 +174,24 @@ export async function createApp(options: AppOptions = {}) {
   app.post('/auth/logout', async (request, reply) => {
     const current = session(request);
     db.prepare('UPDATE sessions SET revoked_at = ? WHERE token_hash = ?').run(clock(), current.tokenHash);
+    events.revoke(current.tokenHash);
     return reply.code(204).send();
+  });
+  app.get('/api/events', async (request, reply) => {
+    const current = session(request);
+    const stream = events.subscribe(current.user.id, current.tokenHash);
+    if (!stream) {
+      reply.header('Retry-After', '30');
+      throw new ApiFailure(429, 'rate_limited', 'Event subscription limit reached.');
+    }
+    reply.header('Content-Type', 'text/event-stream; charset=utf-8');
+    reply.header('Cache-Control', 'no-store');
+    reply.header('X-Accel-Buffering', 'no');
+    // Fastify destroys piped streams on client cancellation; explicitly retain the
+    // close binding so admission capacity is released on all socket teardown paths.
+    reply.raw.once('close', () => stream.destroy());
+    stream.once('close', () => { if (!reply.raw.writableEnded) reply.raw.destroy(); });
+    return reply.send(stream);
   });
   app.get('/api/notes', { schema: { response: { 200: responseSchema('Notes') } } }, async (request) => {
     const current = session(request);
@@ -191,6 +217,7 @@ export async function createApp(options: AppOptions = {}) {
         .run(note.id, current.user.id, note.title, note.body, now, now);
       db.exec('COMMIT');
     } catch (error) { db.exec('ROLLBACK'); throw error; }
+    events.publish(current.user.id, { operation: 'created', noteId: note.id });
     return reply.code(201).send({ note });
   });
   app.patch<{ Params: { id: string }; Body: { title?: string; body?: string } }>('/api/notes/:id', {
@@ -206,12 +233,14 @@ export async function createApp(options: AppOptions = {}) {
     row.updated_at = new Date(clock()).toISOString();
     db.prepare('UPDATE notes SET title = ?, body = ?, updated_at = ? WHERE id = ? AND user_id = ?')
       .run(row.title, row.body, row.updated_at, row.id, current.user.id);
+    events.publish(current.user.id, { operation: 'updated', noteId: row.id });
     return { note: noteOutput(row) };
   });
   app.delete<{ Params: { id: string } }>('/api/notes/:id', async (request, reply) => {
     const current = session(request);
     const result = db.prepare('DELETE FROM notes WHERE id = ? AND user_id = ?').run(request.params.id, current.user.id);
     if (result.changes === 0) throw notFound();
+    events.publish(current.user.id, { operation: 'deleted', noteId: request.params.id });
     return reply.code(204).send();
   });
   return { app, db };

@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Locho reference notes API
-  version: 1.0.0
+  version: 1.1.0
   description: |
     API v1 shared by Flutter and browser applications. HTTP travels inside a
     Locho TCP attachment; bearer tokens authenticate backend users separately.
@@ -20,6 +20,35 @@ servers:
 security:
   - bearerSession: []
 paths:
+  /api/events:
+    get:
+      operationId: noteEvents
+      description: |
+        Bearer-authenticated process-local SSE invalidations for the current user.
+        Events have name note.changed and a single JSON data line matching NoteChange.
+        No event IDs, history or Last-Event-ID replay. Refresh notes after reconnect.
+        Initial connected comment and heartbeat comments at most 30 seconds apart.
+        Session expiry/revocation checked on each event and at least every 30 seconds;
+        logout closes that session's streams immediately. Closure may be EOF or reset.
+        Limits: 4 subscribers per user, 64 total, 1024-byte frame, 4096-byte stream
+        high-water mark. Backpressure disconnects slow consumers rather than queues.
+        A stream may close at any time; validate health/me before explicit reconnection.
+      responses:
+        '200':
+          description: Incremental event stream; Cache-Control no-store, X-Accel-Buffering no
+          content:
+            text/event-stream:
+              schema: { type: string }
+              example: "event: note.changed\ndata: {\"operation\":\"created\",\"noteId\":\"synthetic-id\"}\n\n"
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '429':
+          description: User or aggregate subscription capacity reached
+          headers:
+            Retry-After: { schema: { type: integer, enum: [30] } }
+          content:
+            application/json:
+              schema: { $ref: './schemas.json#/definitions/ApiError' }
+        '500': { $ref: '#/components/responses/InternalError' }
   /health:
     get:
       operationId: health
@@ -139,6 +168,8 @@ paths:
         '404': { $ref: '#/components/responses/NotFound' }
         '500': { $ref: '#/components/responses/InternalError' }
 components:
+  schemas:
+    NoteChange: { $ref: './schemas.json#/definitions/NoteChange' }
   securitySchemes:
     bearerSession:
       type: http
