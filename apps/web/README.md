@@ -79,6 +79,11 @@ checksum and compatibility changes together.
 
 ## Verification and deployment
 
+The extended suite now passes 27 cases including host restart, stopped upstream,
+committed-but-lost POST/PATCH/DELETE responses with no replay, and a new page owner
+restoring a remembered session. See [JSON failure acceptance](../../../docs/json-acceptance.md)
+in the repository root (`docs/json-acceptance.md`) for reproduction and limitations.
+
 ```sh
 npm run check
 npx playwright install chromium firefox webkit

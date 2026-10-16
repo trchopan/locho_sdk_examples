@@ -1,5 +1,14 @@
 # Next development and handoffs
 
+## JSON failure acceptance
+
+Shared test fixture and packaged apps now verify host restart/upstream outage and
+unknown mutation outcomes without replay. Browser production matrix passes 27
+cases locally. Flutter adds tap-driven CRUD, real controller failure injection and
+release process-restart secure restore on the ARM64 16 KiB emulator. See
+json-acceptance.md for exact coverage. Next: deployment/reproducible handoff and
+remaining physical/mobile/network acceptance before streaming extensions.
+
 ## SDK dev.2 integration
 
 Both notes apps now pin dev.2 artifacts from Locho PR #97. Browser observation uses

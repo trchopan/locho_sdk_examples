@@ -103,6 +103,14 @@ committed files. The frontend build requires no React/browser build.
 
 ## Acceptance
 
+Additional JSON failure acceptance is recorded in [the shared matrix](../../../docs/json-acceptance.md)
+from the repository root (`docs/json-acceptance.md`). Run the fixture with `--ui`
+for tap-driven pairing/login/CRUD/logout/forget, `--failures` for real host restart,
+upstream outage and dropped POST/PATCH/DELETE responses, or `--process-restart`
+for release secure restore after force-stop and relaunch. The last mode resets only
+this disposable demo app's local storage before seeding. These modes pass locally
+on the ARM64 16 KiB emulator; physical device acceptance remains open.
+
 From repository root after building the API and a ticket-capable CLI:
 
 ```sh
