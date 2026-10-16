@@ -1,0 +1,5 @@
+:root { font: 16px system-ui; color: #152838; background: #edf2f5; }
+main { max-width: 800px; margin: 2rem auto; padding: 2rem; background: white; border-radius: 12px; }
+label { display: block; margin: 1rem 0; } input, textarea { display: block; box-sizing: border-box; width: 100%; padding: .7rem; font: inherit; }
+button { padding: .6rem 1rem; margin: .3rem; cursor: pointer; } button:disabled { cursor: wait; opacity: .5; }
+[role=alert] { background: #fff0d6; padding: 1rem; } pre { white-space: pre-wrap; overflow-wrap: anywhere; } li { border-top: 1px solid #ddd; padding: 1rem 0; } ul { list-style: none; padding: 0; }
