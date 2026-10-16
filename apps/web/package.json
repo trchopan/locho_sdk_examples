@@ -10,7 +10,7 @@
     "test": "node --import tsx --test test/*.test.ts"
   },
   "dependencies": {
-    "@locho/web": "file:../../vendor/locho-web-0.1.0-dev.2.tgz",
+    "@locho/web": "file:../../vendor/locho-web-0.1.0-dev.3.tgz",
     "react": "19.2.0",
     "react-dom": "19.2.0"
   },

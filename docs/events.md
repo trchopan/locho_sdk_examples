@@ -55,13 +55,21 @@ build/typecheck/contract validation), `npm run smoke:locho`, and the three-brows
 Playwright matrix (27 passed; three deployment-only cases skipped in this local
 mode). CI runs the tunnel smoke alongside the existing browser/deployment gates.
 
-This is the backend/contract slice only. The current packaged browser SDK buffers
-responses and must **not** be used to consume an infinite SSE body; native browser
-EventSource cannot address a Locho host ID or supply this bearer-header flow.
-Next: bounded browser streaming/readable-body API, then shared SSE parsing and
-browser/Flutter UI integration through packaged SDKs. Flutter can use ordinary
-streamed Dart HTTP via loopback, with setup/idle rather than full-body lifetime
-timeouts. No production app is automatically subscribing in this slice.
+Browser consumes packaged dev.3 `fetchStream()` and now subscribes automatically
+for an authenticated foreground session. See apps/web/README.md for bounded parsing,
+refresh coalescing, backoff, missed-change recovery and ownership. Buffered `fetch()`
+remains unsuitable for infinite SSE; native EventSource cannot address Locho host IDs
+or supply this bearer-header flow. Flutter integration is next: ordinary streamed
+Dart HTTP through loopback with setup/idle, rather than full-body lifetime, timeouts.
+
+Browser verification adds eight deterministic parser/ownership/recovery tests
+(20 browser unit tests total) and nine production UI cases across three engines:
+same-user live CRUD, isolation, missed changes during event outage, draft retention,
+idle expiry with saved-token removal, and repeated page-event cleanup. The previous
+JSON/browser failure matrix remains a gate. Local full run passed 35/36 active
+cases; one Firefox remembered-restore N0 timeout passed a focused rerun. Private
+Compose and internal-CA HTTPS/CSP/WASM acceptance passed all six deployment cases.
+These are desktop browser results, not physical/mobile or actual BFCache evidence.
 
 Physical/mobile, authenticated custom relay, public HTTPS and broad network gates
 listed in deployment/json-acceptance docs remain open; backend SSE does not close

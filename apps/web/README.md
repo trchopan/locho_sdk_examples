@@ -26,9 +26,9 @@ from the root README. Ticket input and password fields clear after submission.
 The host must support ticket v1 (Locho PR #91 or later). The app validates health
 identity/version before login. A peer connection alone is not API readiness.
 
-SDK pin: `0.1.0-dev.2`, source `a509ccafc1bb8137aa6ac165f046d32c91f3de22`, CI run
-`38877468606`, artifact `locho-web-npm-package`, tarball SHA-256
-`88695d87443770c391463799ba00f6a09068fdb0b749b1b0a614f72b74ed797e`.
+SDK pin: `0.1.0-dev.3`, source `e5faa3f320c9c142dbc155ac8e4a27e01a0c0d7f` (Locho #98), CI run
+`38932541782` (test-merge build `8a9e67e3fbe978a1f62ff1782ba7b183af568b7f`), artifact `locho-web-npm-package`, tarball SHA-256
+`83ea65e191af93a40cc1b652642e4335ef044ebb39fa31b64488ef736d5e091c`.
 The setup script verifies this hash; npm lock additionally pins integrity. Artifacts
 can expire: keep an immutable local copy and supply `LOCHO_SDK_ARCHIVE` when needed.
 No npm registry publication is assumed. Artifact upgrades require reviewed pin,
@@ -73,9 +73,33 @@ checksum and compatibility changes together.
 - The dev.2 SDK provides Rust-watch-backed subscriptions. One owned observer
   hides notes on reconnecting and recreates/revalidates after recovery; no interval
   polling or mutation replay. Teardown unsubscribes before client close; generation
-  guards discard late callbacks. Real network-transition evidence and cross-tab
-  coordination remain future work. Tabs retain independent live state; changes in another tab are not
-  broadcast and do not revoke its backend token.
+   guards discard late callbacks. Real network-transition evidence remains future
+   work. Tabs own independent backend sessions; logout revokes only its own token.
+
+## Live note updates
+
+The dev.3 streaming API carries bearer-authenticated `/api/events`. One owned event
+watch per authenticated foreground session subscribes before the canonical list
+refresh. Same-user changes in other tabs/devices invalidate the list; notes are
+reloaded from the API. Editor drafts and unknown-write messages survive background
+refresh. A live-update status is separate from transport and user authentication.
+
+Parsing handles fragmented UTF-8, CR/LF/CRLF, comments and multiline data, with a
+4096-byte line/event budget and strict NoteChange fields. Unknown event names/id/retry
+are ignored. Invalid/truncated UTF-8, malformed JSON/schema and oversized frames close
+the reader and enter recovery. There is no event history or Last-Event-ID replay.
+
+Bursts coalesce into one list request and one dirty follow-up per in-flight request.
+Refreshes serialize with other list reads, defer during user actions, and reject stale
+authenticated results after token removal. Events never acknowledge a write or replay it.
+
+On EOF/reset/idle timeout/parser failure: retain notes, show reconnecting, retry with
+exponential backoff (1s initial, jitter, 30s cap; stable 30s stream resets backoff).
+429 respects integer Retry-After up to 300s. Each retry validates health/me, subscribes,
+then refreshes canonical notes to recover missed changes. 401 clears auth/persisted
+token while retaining pairing. Failed background refresh also restarts the watch.
+Explicit disconnect/logout/forget/host switch/pagehide cancel readers and retry timers;
+pageshow restores only surviving connection intent. Actual BFCache remains unverified.
 
 ## Verification and deployment
 
@@ -104,6 +128,5 @@ relay, physical mobile browser or HTTPS deployment acceptance.
 Deploy `apps/web/dist` as static assets over HTTPS. Serve `.wasm` with
 `application/wasm`; CSP must permit modules/WebAssembly compilation and HTTPS/WSS
 N0 discovery/relays. Keep third-party scripts and analytics off credential pages.
-The API remains private behind Locho, not public ingress. QR, SDK status subscriptions,
-real mobile/HTTPS/BFCache/network acceptance, SSE/WebSockets and the Flutter notes
-application remain later milestones.
+The API remains private behind Locho, not public ingress. Flutter event consumers,
+WebSockets and real mobile/BFCache/network acceptance remain follow-ups.

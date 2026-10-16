@@ -119,7 +119,7 @@ test('packaged SDK pairing login CRUD isolation reconnect logout and forget', as
   await page.getByRole('button', { name: `Edit ${title}`, exact: true }).click();
   await page.getByLabel('Body', { exact: true }).fill('Edited body');
   await page.getByRole('button', { name: 'Save changes', exact: true }).click();
-  await expect(page.locator('li pre')).toContainText('Edited body');
+  await expect(page.locator('li').filter({ has: page.getByRole('heading', { name: title, exact: true }) }).locator('pre')).toContainText('Edited body');
   await page.getByRole('button', { name: 'Disconnect', exact: true }).click();
   await expect(page.getByRole('heading', { name: /^Notes for/ })).toHaveCount(0);
   await page.getByRole('button', { name: 'Reconnect', exact: true }).click();

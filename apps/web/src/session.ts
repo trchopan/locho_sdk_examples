@@ -1,6 +1,8 @@
 export type User = { id: string; email: string };
+import { NoteEventWatch, type EventTransport, type LiveState, type EventOptions } from './events';
 export type Note = { id: string; title: string; body: string; createdAt: string; updatedAt: string };
 export interface Transport {
+  fetchStream?: EventTransport['fetchStream'];
   fetch(path: string, options?: { method?: 'GET' | 'POST' | 'PATCH' | 'DELETE'; headers?: Record<string, string>; body?: string; signal?: AbortSignal; timeoutMs?: number }): Promise<Response>;
   close(): Promise<void>;
   readonly status?: { state: string };
@@ -13,10 +15,11 @@ export type State = {
   phase: 'unpaired' | 'disconnected' | 'connecting' | 'checking' | 'login' | 'notes';
   label: string; user?: User; notes: Note[]; busy: boolean; message: string;
   remember: boolean; storageBusy: boolean; storageError: string;
+  live: LiveState;
 };
 class ApiError extends Error { constructor(readonly status: number, readonly code: string) { super('API failure'); } }
 class Obsolete extends Error {}
-const initial = (): State => ({ phase: 'unpaired', label: '', notes: [], busy: false, message: '', remember: false, storageBusy: false, storageError: '' });
+const initial = (): State => ({ phase: 'unpaired', label: '', notes: [], busy: false, message: '', remember: false, storageBusy: false, storageError: '', live: 'off' });
 
 export class Session {
   state = initial();
@@ -35,11 +38,17 @@ export class Session {
   private restoring?: Promise<void>;
   private recovering = false;
   private unsubscribe?: () => Promise<void>;
-  constructor(private parse: (value: string) => Promise<Pairing>, private store?: CredentialStore) {}
+  private events?: NoteEventWatch;
+  private eventsCleanup: Promise<void> = Promise.resolve();
+  private dirty = false;
+  private loading?: { generation: number; promise: Promise<void> };
+  private refreshQueued = false;
+  constructor(private parse: (value: string) => Promise<Pairing>, private store?: CredentialStore, private eventOptions: EventOptions = {}) {}
   subscribe = (listener: () => void) => { this.listeners.add(listener); return () => { this.listeners.delete(listener); }; };
   snapshot = () => this.state;
   private update(patch: Partial<State>) { this.state = { ...this.state, ...patch }; this.listeners.forEach((listener) => listener()); }
   private invalidate(close = true) {
+    this.stopEvents(); this.dirty = false; this.loading = undefined;
     this.generation++; this.cancel.abort(); this.cancel = new AbortController();
     const client = this.client; this.client = undefined;
     const unsubscribe = this.unsubscribe; this.unsubscribe = undefined;
@@ -49,6 +58,47 @@ export class Session {
     return this.generation;
   }
   private current(generation: number) { if (generation !== this.generation) throw new Obsolete(); }
+  private stopEvents() {
+    const events = this.events; this.events = undefined;
+    this.eventsCleanup = Promise.all([this.eventsCleanup, events?.stop()]).then(() => {});
+    this.update({ live: 'off' });
+  }
+  private async clearAuth(g: number) {
+    this.current(g); this.stopEvents(); this.auth = undefined; this.dirty = false; this.loading = undefined;
+    this.update({ phase: 'login', user: undefined, notes: [] });
+    await this.persist(); this.current(g);
+  }
+  private async startEvents(g: number) {
+    await this.eventsCleanup; this.current(g);
+    if (!this.auth || !this.client?.fetchStream || this.events) return;
+    const watch = new NoteEventWatch({ fetchStream: this.client.fetchStream.bind(this.client) }, this.auth.token, {
+      state: (live) => { if (g === this.generation && this.events === watch) this.update({ live }); },
+      refresh: () => { if (g === this.generation && this.events === watch) this.queueRefresh(g); },
+      unauthorized: async () => { if (g === this.generation && this.events === watch) await this.clearAuth(g); },
+      validate: async () => {
+        this.current(g);
+        const health = await this.call('/health', g, false);
+        if (health?.service !== 'locho-notes' || health?.apiVersion !== 1) throw new Error('Wrong API');
+        const me = await this.call('/api/me', g);
+        if (!this.auth || me?.user?.id !== this.auth.user.id || typeof me.expiresAt !== 'string') throw new Error('Invalid session');
+      },
+    }, this.eventOptions);
+    this.events = watch;
+    await watch.start(); this.current(g);
+  }
+  private queueRefresh(g: number) {
+    this.dirty = true;
+    if (this.refreshQueued) return;
+    this.refreshQueued = true;
+    queueMicrotask(() => {
+      this.refreshQueued = false;
+      if (g !== this.generation || !this.auth || this.state.busy || !this.dirty) return;
+      void this.load(g).catch(() => {
+        // Keep action messages (especially unknown writes) independent of live updates.
+        if (g === this.generation && this.auth) { this.update({ live: 'reconnecting' }); this.events?.reconnect(); }
+      });
+    });
+  }
   private persist(): Promise<void> {
     const revision = ++this.storageRevision;
     let record: SavedSession | undefined;
@@ -151,11 +201,13 @@ export class Session {
         const me = await this.call('/api/me', generation);
         if (!me?.user || typeof me.expiresAt !== 'string') throw new Error('Malformed API');
         this.auth = { ...this.auth, user: me.user, expiresAt: me.expiresAt };
-        await this.load(generation);
+        await this.startEvents(generation);
+        if (this.auth) await this.load(generation);
       }
       this.current(generation);
       await this.persist(); this.current(generation);
       this.update({ phase: this.auth ? 'notes' : 'login', busy: false, user: this.auth?.user });
+      if (this.dirty) this.queueRefresh(generation);
       this.unsubscribe = client.subscribeStatus?.((status) => {
         void this.observeTransport(status, generation);
       }, { onError: () => {
@@ -163,6 +215,7 @@ export class Session {
       } });
     } catch (error) {
       if (generation !== this.generation) return;
+      this.stopEvents();
       this.client = undefined; await client?.close().catch(() => {});
       if (generation !== this.generation) return;
       this.update({ phase: 'disconnected', busy: false, message: error instanceof ApiError && error.status === 401 ? 'Session expired. Reconnect to log in.' : 'Connection or API check failed. Check ticket, service and network.' });
@@ -187,21 +240,25 @@ export class Session {
   private async call(path: string, generation: number, authenticated = true, method: 'GET' | 'POST' | 'PATCH' | 'DELETE' = 'GET', body?: unknown) {
     this.current(generation);
     if (!this.client) throw new Error('Disconnected');
+    const token = authenticated ? this.auth?.token : undefined;
+    const current = () => {
+      this.current(generation);
+      if (authenticated && token !== this.auth?.token) throw new Obsolete();
+    };
     const headers: Record<string, string> = {};
     if (authenticated && this.auth) headers.Authorization = `Bearer ${this.auth.token}`;
     if (body !== undefined) headers['Content-Type'] = 'application/json';
     const response = await this.client.fetch(path, { method, headers, ...(body === undefined ? {} : { body: JSON.stringify(body) }), signal: this.cancel.signal, timeoutMs: 15000 });
-    this.current(generation);
+    current();
     if (!response.ok) {
       // Never display arbitrary backend bodies or exception text.
       if (authenticated && response.status === 401) {
-        this.auth = undefined; this.update({ phase: 'login', user: undefined, notes: [] });
-        await this.persist(); this.current(generation);
+        await this.clearAuth(generation);
       }
       throw new ApiError(response.status, 'http');
     }
     if (response.status === 204) return undefined;
-    const data = await response.json(); this.current(generation); return data;
+    const data = await response.json(); current(); return data;
   }
   private async action(run: (generation: number) => Promise<void>, mutation = false) {
     if (this.state.busy) return;
@@ -217,6 +274,7 @@ export class Session {
     } finally {
       if (generation === this.generation) {
         this.update({ busy: false });
+        if (this.dirty) this.queueRefresh(generation);
         if (this.recovering) void this.observeTransport();
       }
     }
@@ -226,13 +284,24 @@ export class Session {
     if (typeof data?.token !== 'string' || typeof data.expiresAt !== 'string' || typeof data.user?.email !== 'string') throw new Error('Malformed API');
     this.auth = data;
     await this.persist(); this.current(g);
-    await this.load(g);
-    this.update({ phase: 'notes', user: this.auth?.user });
+    await this.startEvents(g);
+    if (this.auth) {
+      await this.load(g);
+      this.update({ phase: 'notes', user: this.auth?.user });
+    }
   }); }
-  private async load(g: number) {
-    const data = await this.call('/api/notes', g);
-    if (!Array.isArray(data?.notes) || data.notes.length > 100 || data.notes.some((n: Note) => typeof n.id !== 'string' || typeof n.title !== 'string' || typeof n.body !== 'string')) throw new Error('Malformed API');
-    this.update({ notes: data.notes });
+  private load(g: number): Promise<void> {
+    if (this.loading?.generation === g) { this.dirty = true; return this.loading.promise; }
+    const work = (async () => {
+      do {
+        this.current(g); this.dirty = false;
+        const data = await this.call('/api/notes', g);
+        if (!Array.isArray(data?.notes) || data.notes.length > 100 || data.notes.some((n: Note) => typeof n.id !== 'string' || typeof n.title !== 'string' || typeof n.body !== 'string')) throw new Error('Malformed API');
+        this.update({ notes: data.notes });
+      } while (this.dirty && this.auth);
+    })();
+    const promise = work.finally(() => { if (this.loading?.promise === promise) this.loading = undefined; });
+    this.loading = { generation: g, promise }; return promise;
   }
   refresh() { return this.action((g) => this.load(g)); }
   save(title: string, body: string, id?: string) { return this.action(async (g) => {

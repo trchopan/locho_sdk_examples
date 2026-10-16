@@ -1,6 +1,7 @@
 # JSON failure acceptance — 2026-10-16
 
-Both apps consume the checksum-pinned dev.2 SDKs documented in compatibility.md.
+The original JSON acceptance used dev.2 SDKs. Browser now consumes checksum-pinned
+dev.3 with live events; Flutter remains dev.2. See compatibility.md for exact pins.
 The shared test-only `scripts/acceptance-fixture.mjs` starts an isolated reference
 API, disposable users, a numeric-loopback forwarding boundary and the real Locho
 host. It generates a fresh ticket, exposes fixture control only on host loopback,

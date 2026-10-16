@@ -24,11 +24,18 @@ async function stop(server) {
 export async function acceptanceFixture(binary) {
   if (!binary) throw new Error('LOCHO_BINARY must point to the pinned built CLI');
   const directory = await mkdtemp(join(tmpdir(), 'notes-acceptance-'));
-  const { app, db } = await createApp({ loginAttempts: 1000 });
+  const { app, db } = await createApp({ loginAttempts: 1000, eventsTickMs: 100 });
   let host, apiPort, proxyPort, interrupt;
   let mutations = 0, dropped = 0;
+  const eventResponses = new Set();
+  let eventsPaused = false;
   const forwarded = new Set();
   const proxy = createServer((incoming, outgoing) => {
+    if (incoming.url === '/api/events') {
+      if (eventsPaused) { outgoing.writeHead(503).end(); return; }
+      eventResponses.add(outgoing);
+      outgoing.once('close', () => eventResponses.delete(outgoing));
+    }
     const mutation = incoming.url.startsWith('/api/notes') && ['POST', 'PATCH', 'DELETE'].includes(incoming.method);
     if (mutation) mutations++;
     const loseResponse = mutation && interrupt === incoming.method;
@@ -81,8 +88,12 @@ export async function acceptanceFixture(binary) {
     else if (action === 'upstream-stop') await stop(proxy);
     else if (action === 'upstream-start') { if (!proxy.listening) await listen(proxy, proxyPort); }
     else if (['interrupt-POST', 'interrupt-PATCH', 'interrupt-DELETE'].includes(action)) interrupt = action.slice(10);
+    else if (action === 'events-stop') { for (const response of eventResponses) response.destroy(); }
+    else if (action === 'events-pause') { eventsPaused = true; for (const response of eventResponses) response.destroy(); }
+    else if (action === 'events-resume') eventsPaused = false;
+    else if (action === 'events-expire') db.prepare('UPDATE sessions SET expires_at = 0').run();
     else if (action !== 'status') throw new Error('Unknown fixture action');
-    return { mutations, dropped, upstream: proxy.listening, host: Boolean(host?.pid && host.exitCode === null && host.signalCode === null) };
+    return { mutations, dropped, eventStreams: eventResponses.size, upstream: proxy.listening, host: Boolean(host?.pid && host.exitCode === null && host.signalCode === null) };
   }
   let queue = Promise.resolve();
   const control = createServer((request, response) => {
