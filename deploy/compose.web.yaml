@@ -1,0 +1,16 @@
+name: locho-notes-web
+services:
+  web:
+    image: caddy:2.10.2
+    restart: unless-stopped
+    environment:
+      NOTES_HOSTNAME: ${NOTES_HOSTNAME:?Set NOTES_HOSTNAME to your public website domain}
+    ports: ['80:80', '443:443', '443:443/udp']
+    volumes:
+      - ../apps/web/dist:/srv:ro
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - certificates:/data
+      - caddy-config:/config
+volumes:
+  certificates: {}
+  caddy-config: {}

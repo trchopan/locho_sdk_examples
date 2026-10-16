@@ -1,0 +1,18 @@
+FROM node:24.18.0-bookworm AS build
+WORKDIR /app
+COPY package.json package-lock.json tsconfig.json ./
+COPY apps/api apps/api
+COPY apps/web/package.json apps/web/package.json
+COPY vendor/locho-web-0.1.0-dev.2.tgz vendor/locho-web-0.1.0-dev.2.tgz
+COPY contracts contracts
+RUN npm ci && npm run build --workspace @locho-examples/api && npm prune --omit=dev
+
+FROM node:24.18.0-bookworm-slim
+WORKDIR /app/apps/api
+ENV NODE_ENV=production API_HOST=0.0.0.0 API_PORT=8080 API_DATABASE=/data/notes.sqlite
+COPY --from=build /app/node_modules /app/node_modules
+COPY --from=build /app/apps/api/dist ./dist
+COPY --from=build /app/contracts /app/contracts
+RUN mkdir /data && chown node:node /data
+USER node
+CMD ["node", "dist/src/server.js"]
