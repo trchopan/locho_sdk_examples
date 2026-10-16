@@ -1,0 +1,60 @@
+name: locho-notes
+services:
+  api:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.api
+    restart: unless-stopped
+    environment:
+      API_HOST: 0.0.0.0
+      API_PORT: '8080'
+      API_DATABASE: /data/notes.sqlite
+      API_SESSION_SECONDS: ${API_SESSION_SECONDS:-2592000}
+    volumes:
+      - notes:/data
+    networks:
+      private:
+        ipv4_address: 172.30.89.10
+    healthcheck:
+      test: [CMD, node, -e, "fetch('http://127.0.0.1:8080/health').then(async r=>{const b=await r.json();process.exit(r.status===200&&b.service==='locho-notes'&&b.apiVersion===1?0:1)}).catch(()=>process.exit(1))"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+  locho:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.locho
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_healthy
+    volumes:
+      - identity:/state
+      - ./locho.container.toml:/etc/locho/locho.toml:ro
+    networks:
+      - private
+      - egress
+  # Explicit one-shot seed; no disposable passwords enter normal API containers.
+  seed:
+    profiles: [tools]
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.api
+    environment:
+      API_DATABASE: /data/notes.sqlite
+      DEV_ALICE_PASSWORD: ${DEV_ALICE_PASSWORD:-alice-local-demo-only}
+      DEV_BOB_PASSWORD: ${DEV_BOB_PASSWORD:-bob-local-demo-only}
+    volumes:
+      - notes:/data
+    command: [node, dist/src/seed.js]
+    network_mode: none
+networks:
+  private:
+    internal: true
+    ipam:
+      config:
+        - subnet: 172.30.89.0/24
+  egress: {}
+volumes:
+  notes: {}
+  identity: {}

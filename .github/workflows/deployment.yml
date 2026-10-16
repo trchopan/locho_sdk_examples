@@ -1,0 +1,26 @@
+name: Private deployment and HTTPS handoff
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  deployment:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24.18.0'
+          cache: npm
+      - run: npm run sdk:setup
+        env:
+          GH_TOKEN: ${{ github.token }}
+      - run: npm ci
+      - run: npm run build
+      - run: npm run test:artifacts
+      - run: npx playwright install --with-deps chromium firefox webkit
+      - run: npm run test:deployment

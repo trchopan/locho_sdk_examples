@@ -1,0 +1,12 @@
+.git
+node_modules
+**/node_modules
+**/dist
+**/build
+**/.dart_tool
+.data
+.env*
+target
+test-results
+vendor/*
+!vendor/locho-web-0.1.0-dev.2.tgz

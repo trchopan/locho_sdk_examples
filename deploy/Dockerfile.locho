@@ -1,0 +1,15 @@
+FROM rust:1.96.0-bookworm AS build
+ARG LOCHO_REVISION=4f8aa20c3bcbabb667ef2354510bdb101d690fa6
+WORKDIR /source
+RUN git init && git remote add origin https://github.com/trchopan/locho.git && \
+    git fetch --depth 1 origin "$LOCHO_REVISION" && git checkout --detach FETCH_HEAD && \
+    test "$(git rev-parse HEAD)" = "$LOCHO_REVISION" && cargo build --locked --release --bin locho
+
+FROM debian:bookworm-slim
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates && rm -rf /var/lib/apt/lists/* && \
+    useradd --uid 10001 --create-home locho && mkdir /state && chown locho:locho /state
+COPY --from=build /source/target/release/locho /usr/local/bin/locho
+ENV LOCHO_STATE_DIR=/state
+USER locho
+ENTRYPOINT ["locho"]
+CMD ["host", "--config", "/etc/locho/locho.toml"]
