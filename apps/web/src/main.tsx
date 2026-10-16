@@ -2,15 +2,20 @@ import React, { useEffect, useState, useSyncExternalStore } from 'react';
 import { createRoot } from 'react-dom/client';
 import { LochoClient, LochoTicket } from '@locho/web';
 import { Session, type Note } from './session';
+import { IndexedCredentials } from './storage';
 import './style.css';
 
 const session = new Session(async (text) => {
   const ticket = await LochoTicket.parse(text);
   const metadata = ticket.metadata;
   if (metadata.serviceType !== 'tcp') throw new Error('TCP ticket required');
-  return { key: `${metadata.hostId}/${metadata.service}/${metadata.serviceType}`, label: `${metadata.service} · ${metadata.hostId.slice(0, 12)}`, connect: (signal) => LochoClient.connect({ ticket, signal, http: { authority: 'sample-api' } }) };
-});
-window.addEventListener('pagehide', () => session.disconnect());
+  return { key: `${metadata.hostId}/${metadata.service}/${metadata.serviceType}`, label: `${metadata.service} · ${metadata.hostId.slice(0, 12)}`, export: () => ticket.export(), connect: (signal) => LochoClient.connect({ ticket, signal, http: { authority: 'sample-api' } }) };
+}, new IndexedCredentials());
+window.addEventListener('pagehide', () => session.suspend());
+window.addEventListener('pageshow', () => { void session.resume(); });
+void session.restore();
+// SDK exposes snapshots, not subscriptions. Poll while active without overlapping work.
+setInterval(() => { void session.observeTransport(); }, 1000);
 
 function App() {
   const state = useSyncExternalStore(session.subscribe, session.snapshot);
@@ -25,14 +30,17 @@ function App() {
   return <main>
     <h1>Locho Notes</h1><p>Private notes through your Locho TCP service.</p>
     <p role="status">{state.phase}{state.label && ` · ${state.label}`}</p>
-    <p>Memory-only pairing and login. Nothing is remembered after a fresh page load.</p>
+    <p>{state.remember ? 'Remember enabled. Saved credentials are revalidated before notes are restored.' : 'Memory-only pairing and login. Nothing is remembered after a fresh page load.'}</p>
+    <label><input type="checkbox" checked={state.remember} onChange={(e) => void session.setRemember(e.target.checked)} />Remember this device</label>
+    {state.storageBusy && <p>Updating saved credentials…</p>}
+    {state.storageError && <p role="alert">{state.storageError} <button onClick={() => void session.setRemember(state.remember)}>Retry storage</button></p>}
     <form onSubmit={(e) => { e.preventDefault(); const input = ticket; setTicket(''); void session.pair(input); }}>
       <label>Attachment ticket<input type="password" autoComplete="off" value={ticket} onChange={(e) => setTicket(e.target.value)} required /></label>
       <button disabled={state.busy}>Pair</button>
     </form>
     <nav><button onClick={() => void session.reconnect()} disabled={state.busy || state.phase !== 'disconnected'}>Reconnect</button>
       <button onClick={() => session.disconnect()}>Disconnect</button>
-      <button onClick={() => { session.forget(); setTicket(''); setPassword(''); setTitle(''); setBody(''); setEditing(undefined); }}>Forget homelab</button>
+      <button onClick={() => { void session.forget(); setTicket(''); setPassword(''); setTitle(''); setBody(''); setEditing(undefined); }}>Forget homelab</button>
       <button onClick={() => { setPassword(''); void session.logout(); }} disabled={state.busy}>Logout</button></nav>
     {state.message && <p role="alert">{state.message}</p>}
     {state.phase === 'login' && <form onSubmit={(e) => { e.preventDefault(); const value = password; setPassword(''); void session.login(email, value); }}>

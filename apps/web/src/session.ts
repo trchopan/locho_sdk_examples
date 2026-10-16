@@ -3,16 +3,19 @@ export type Note = { id: string; title: string; body: string; createdAt: string;
 export interface Transport {
   fetch(path: string, options?: { method?: 'GET' | 'POST' | 'PATCH' | 'DELETE'; headers?: Record<string, string>; body?: string; signal?: AbortSignal; timeoutMs?: number }): Promise<Response>;
   close(): Promise<void>;
+  readonly status?: { state: string };
 }
-export interface Pairing { key: string; label: string; connect(signal: AbortSignal): Promise<Transport> }
-type Auth = { token: string; expiresAt: string; user: User };
+import type { CredentialStore, SavedSession } from './storage';
+export interface Pairing { key: string; label: string; connect(signal: AbortSignal): Promise<Transport>; export?(): string }
+export type Auth = { token: string; expiresAt: string; user: User };
 export type State = {
   phase: 'unpaired' | 'disconnected' | 'connecting' | 'checking' | 'login' | 'notes';
   label: string; user?: User; notes: Note[]; busy: boolean; message: string;
+  remember: boolean; storageBusy: boolean; storageError: string;
 };
 class ApiError extends Error { constructor(readonly status: number, readonly code: string) { super('API failure'); } }
 class Obsolete extends Error {}
-const initial = (): State => ({ phase: 'unpaired', label: '', notes: [], busy: false, message: '' });
+const initial = (): State => ({ phase: 'unpaired', label: '', notes: [], busy: false, message: '', remember: false, storageBusy: false, storageError: '' });
 
 export class Session {
   state = initial();
@@ -23,7 +26,14 @@ export class Session {
   private generation = 0;
   private cancel = new AbortController();
   private teardown: Promise<void> = Promise.resolve();
-  constructor(private parse: (value: string) => Promise<Pairing>) {}
+  private persistence: Promise<void> = Promise.resolve();
+  private storageRevision = 0;
+  private remember = false;
+  private desired = false;
+  private suspended = false;
+  private restoring?: Promise<void>;
+  private recovering = false;
+  constructor(private parse: (value: string) => Promise<Pairing>, private store?: CredentialStore) {}
   subscribe = (listener: () => void) => { this.listeners.add(listener); return () => { this.listeners.delete(listener); }; };
   snapshot = () => this.state;
   private update(patch: Partial<State>) { this.state = { ...this.state, ...patch }; this.listeners.forEach((listener) => listener()); }
@@ -34,8 +44,88 @@ export class Session {
     return this.generation;
   }
   private current(generation: number) { if (generation !== this.generation) throw new Obsolete(); }
+  private persist(): Promise<void> {
+    const revision = ++this.storageRevision;
+    let record: SavedSession | undefined;
+    try {
+      if (this.remember && this.pairing) {
+        if (!this.pairing.export) throw new Error('Ticket export unavailable');
+        record = { version: 1, key: this.pairing.key, ticket: this.pairing.export(), ...(this.auth ? { auth: structuredClone(this.auth) } : {}) };
+      }
+    } catch { this.update({ storageError: 'Credentials could not be saved. Persistence is unconfirmed.' }); return Promise.resolve(); }
+    if (!this.store) return Promise.resolve();
+    this.update({ storageBusy: true, storageError: '' });
+    const work = async () => {
+      // Discard queued obsolete writes, but always serialize behind any in-flight transaction.
+      if (revision !== this.storageRevision) return;
+      try {
+        await this.store!.replace(record);
+        if (revision === this.storageRevision) this.update({ storageError: '' });
+      } catch {
+        if (revision === this.storageRevision) this.update({ storageError: 'Storage failed. Saved credentials may remain; retry removal or clear site data.' });
+      } finally {
+        if (revision === this.storageRevision) this.update({ storageBusy: false });
+      }
+    };
+    this.persistence = this.persistence.then(work);
+    return this.persistence;
+  }
+  async setRemember(value: boolean) {
+    this.remember = value; this.update({ remember: value }); await this.persist();
+  }
+  restore(): Promise<void> {
+    return this.restoring ??= this.restoreSaved();
+  }
+  private async restoreSaved() {
+    if (!this.store) return;
+    const generation = this.generation, revision = this.storageRevision;
+    this.update({ storageBusy: true });
+    try {
+      const saved = await this.store.read();
+      if (generation !== this.generation || revision !== this.storageRevision) return;
+      if (!saved) return;
+      const pairing = await this.parse(saved.ticket);
+      if (generation !== this.generation || revision !== this.storageRevision) return;
+      if (pairing.key !== saved.key) throw new Error('Stored scope mismatch');
+      this.pairing = pairing; this.auth = saved.auth; this.remember = true;
+      this.update({ remember: true, label: pairing.label });
+      if (this.suspended) { this.desired = true; this.update({ phase: 'disconnected' }); return; }
+      await this.reconnect();
+    } catch {
+      if (generation === this.generation && revision === this.storageRevision) {
+        this.update({ storageError: 'Saved credentials could not be restored. Pair again or forget saved credentials.' });
+      }
+    } finally {
+      if (revision === this.storageRevision) this.update({ storageBusy: false });
+    }
+  }
+  suspend() {
+    this.suspended = true;
+    this.invalidate();
+    this.update({ phase: this.pairing ? 'disconnected' : 'unpaired', busy: false, notes: [], user: undefined, message: 'Page suspended. Credentials retained according to remember choice.' });
+  }
+  async resume() {
+    this.suspended = false;
+    if (this.desired && this.pairing && !this.client && !this.state.busy) await this.reconnect();
+  }
+  async observeTransport() {
+    if (!this.desired || this.suspended || this.state.busy || !this.client?.status) return;
+    const state = this.client.status.state;
+    if (state === 'reconnecting' || state === 'connecting') {
+      this.recovering = true;
+      this.update({ phase: 'disconnected', notes: [], user: undefined, message: 'Transport reconnecting. Requests are not replayed.' });
+    } else if (this.recovering && state === 'connected') {
+      this.recovering = false;
+      await this.reconnect(); // Fresh health/me validation, never an old mutation.
+    } else if (state === 'failed' || state === 'closed') {
+      this.recovering = false;
+      this.disconnect();
+      this.update({ message: 'Transport stopped. Credentials retained; reconnect explicitly.' });
+    }
+  }
   async pair(text: string) { await this.connectPairing(() => this.parse(text.trim())); }
   private async connectPairing(parse: () => Promise<Pairing>) {
+    this.desired = true;
     const generation = this.invalidate();
     this.update({ phase: 'connecting', busy: true, notes: [], user: undefined, message: '' });
     let client: Transport | undefined;
@@ -44,6 +134,7 @@ export class Session {
       if (this.pairing?.key !== pairing.key) this.auth = undefined;
       this.pairing = pairing;
       this.update({ label: pairing.label });
+      await this.persist(); this.current(generation);
       await this.teardown; this.current(generation);
       client = await pairing.connect(this.cancel.signal);
       if (generation !== this.generation) { await client.close(); return; }
@@ -58,10 +149,12 @@ export class Session {
         await this.load(generation);
       }
       this.current(generation);
+      await this.persist(); this.current(generation);
       this.update({ phase: this.auth ? 'notes' : 'login', busy: false, user: this.auth?.user });
     } catch (error) {
       if (generation !== this.generation) return;
       this.client = undefined; await client?.close().catch(() => {});
+      if (generation !== this.generation) return;
       this.update({ phase: 'disconnected', busy: false, message: error instanceof ApiError && error.status === 401 ? 'Session expired. Reconnect to log in.' : 'Connection or API check failed. Check ticket, service and network.' });
     }
   }
@@ -70,11 +163,16 @@ export class Session {
     if (pairing) await this.connectPairing(async () => pairing);
   }
   disconnect() {
+    this.desired = false;
+    this.recovering = false;
     this.invalidate();
-    this.update({ phase: this.pairing ? 'disconnected' : 'unpaired', busy: false, notes: [], user: undefined, message: 'Disconnected. Credentials retained in this tab only.' });
+    this.update({ phase: this.pairing ? 'disconnected' : 'unpaired', busy: false, notes: [], user: undefined, message: 'Disconnected. Credentials retained according to remember choice.' });
   }
-  forget() {
+  async forget() {
+    this.desired = false; this.remember = false;
+    this.recovering = false;
     this.invalidate(); this.pairing = undefined; this.auth = undefined; this.state = initial(); this.listeners.forEach((l) => l());
+    await this.persist();
   }
   private async call(path: string, generation: number, authenticated = true, method: 'GET' | 'POST' | 'PATCH' | 'DELETE' = 'GET', body?: unknown) {
     this.current(generation);
@@ -86,7 +184,10 @@ export class Session {
     this.current(generation);
     if (!response.ok) {
       // Never display arbitrary backend bodies or exception text.
-      if (authenticated && response.status === 401) { this.auth = undefined; this.update({ phase: 'login', user: undefined, notes: [] }); }
+      if (authenticated && response.status === 401) {
+        this.auth = undefined; this.update({ phase: 'login', user: undefined, notes: [] });
+        await this.persist(); this.current(generation);
+      }
       throw new ApiError(response.status, 'http');
     }
     if (response.status === 204) return undefined;
@@ -109,6 +210,7 @@ export class Session {
     const data = await this.call('/auth/login', g, false, 'POST', { email, password });
     if (typeof data?.token !== 'string' || typeof data.expiresAt !== 'string' || typeof data.user?.email !== 'string') throw new Error('Malformed API');
     this.auth = data;
+    await this.persist(); this.current(g);
     await this.load(g);
     this.update({ phase: 'notes', user: this.auth?.user });
   }); }
@@ -125,14 +227,17 @@ export class Session {
   }, true); }
   remove(id: string) { return this.action(async (g) => { await this.call(`/api/notes/${encodeURIComponent(id)}`, g, true, 'DELETE'); await this.load(g); }, true); }
   async logout() {
+    this.desired = false;
     const client = this.client, token = this.auth?.token;
     const generation = this.invalidate(false); this.client = undefined; this.auth = undefined;
     this.update({ phase: this.pairing ? 'disconnected' : 'unpaired', busy: true, user: undefined, notes: [], message: '' });
+    const saving = this.persist();
     let revoked = false;
     if (client && token) {
       try { revoked = (await client.fetch('/auth/logout', { method: 'POST', headers: { Authorization: `Bearer ${token}` }, timeoutMs: 15000 })).status === 204; } catch {}
-      await client.close().catch(() => {});
     }
+    await client?.close().catch(() => {});
+    await saving;
     if (generation === this.generation) this.update({ busy: false, message: revoked ? 'Logged out. Reconnect to log in.' : 'Local session removed. Server revocation is unconfirmed.' });
   }
 }
