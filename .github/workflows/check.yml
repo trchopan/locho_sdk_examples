@@ -1,0 +1,36 @@
+name: Notes API and browser application
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24.18.0'
+          cache: npm
+      - run: npm run sdk:setup
+        env:
+          GH_TOKEN: ${{ github.token }}
+      - run: npm ci
+      - run: npm run check
+      - uses: actions/checkout@v7
+        with:
+          repository: trchopan/locho
+          ref: 4f8aa20c3bcbabb667ef2354510bdb101d690fa6
+          path: target/locho
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@1.96.0
+      - run: cargo build --locked --release --bin locho
+        working-directory: target/locho
+      - run: npx playwright install --with-deps chromium firefox webkit
+      - run: npm run test:browser
+        env:
+          LOCHO_BINARY: ${{ github.workspace }}/target/locho/target/release/locho

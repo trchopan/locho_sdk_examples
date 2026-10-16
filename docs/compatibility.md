@@ -9,9 +9,15 @@
 | Locho host | v1.2.0 / `locho/3`; native adapter merged in PR #80 (`558d2e4`) |
 | Flutter tooling available | Flutter 3.44.5 / Dart 3.12.2; Android NDK 28.2 |
 | Flutter SDK artifact | Not yet available; FRB feasibility next |
-| Browser SDK artifact | Not yet available; WASM/relay proof pending |
-| Tickets | Draft v1; addressing freeze pending browser proof |
+| Browser SDK artifact | @locho/web 0.1.0-dev.1, Locho 4f8aa20c3bcbabb667ef2354510bdb101d690fa6; SHA-256 pinned in setup script and web README |
+| Tickets | v1 locho1: format, shared Rust/WASM/FRB codec; CLI --ticket |
 | Device support claims | None yet; physical Android validation scheduled, iOS open |
+
+Browser app now passes the memory-only production UI journey on local Chromium,
+Firefox and WebKit through public N0 using the pinned SDK tarball. Host CI builds
+the same 4f8aa20 revision. Flutter SDK source archives/external Android/iOS builds
+exist in Locho PR #95; the standalone Flutter notes application is not implemented.
+Physical mobile/HTTPS deployment acceptance and remembered sessions remain open.
 
 Backend baseline verified on development macOS: clean `npm ci`, type checking,
 production build, all eight backend tests, OpenAPI/fixture validation, seed/reset,
