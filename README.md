@@ -101,6 +101,12 @@ contract changes update both consumers atomically once they exist.
 
 ## Checks
 
+Private-container backend and static HTTPS setup are documented in
+[deployment and reproducible handoff](docs/deployment.md). Run `npm run test:deployment`
+to verify the disposable Compose stack and Caddy HTTPS/CSP with packaged browser
+clients. SDK setup supports retained archives/caches and checksum-verified HTTPS
+mirrors; no permanent mirror has been provisioned by this repository.
+
 `npm run check` runs TypeScript checking, production compilation, backend tests,
 OpenAPI validation and fixture-schema checks. Tests cover sessions, expiry,
 revocation, two-user isolation, Unicode/byte limits, malformed requests, persistence,

@@ -1,5 +1,13 @@
 # Next development and handoffs
 
+## Deployment handoff
+
+Private Compose API/Locho topology, separate Caddy static HTTPS hosting, verified
+SDK local-cache/mirror inputs and disposable deployment acceptance are implemented.
+Local Docker ARM64 passes browser login/CRUD through private containers and internal
+CA HTTPS/CSP. Linux CI verifies the same fresh-checkout flow. See deployment.md for
+public ACME/trust, durable artifact hosting and physical-device gates still open.
+
 ## JSON failure acceptance
 
 Shared test fixture and packaged apps now verify host restart/upstream outage and
