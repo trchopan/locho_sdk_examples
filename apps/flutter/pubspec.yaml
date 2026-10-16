@@ -1,0 +1,21 @@
+name: locho_notes
+description: Foreground private notes using the packaged Locho Flutter SDK.
+publish_to: none
+version: 0.1.0+1
+environment:
+  sdk: '>=3.12.2 <4.0.0'
+dependencies:
+  flutter:
+    sdk: flutter
+  locho_flutter:
+    path: ../../vendor/locho_flutter
+  http: 1.6.0
+  flutter_secure_storage: 10.0.0
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  integration_test:
+    sdk: flutter
+  flutter_lints: 6.0.0
+flutter:
+  uses-material-design: true
