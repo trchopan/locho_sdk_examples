@@ -2,6 +2,11 @@
 
 ## Current slice — remembered browser sessions and recovery
 
+Flutter notes app now consumes the checksum-pinned source archive with foreground
+pairing/login/CRUD and opt-in secure storage. Android debug/release controller/runtime
+journey passes on the ARM64 16 KiB emulator. iOS compilation CI, physical mobile,
+network/storage acceptance, deployment and full tap-driven app tests remain gates.
+
 apps/web uses a checksum-pinned packaged SDK and API v1 for pair/health/login/CRUD.
 Opt-in IndexedDB storage, validated restore, remember-off deletion, forget races,
 revoked tokens, storage failure and page-event ownership now pass 18 production UI
