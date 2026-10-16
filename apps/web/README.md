@@ -26,9 +26,9 @@ from the root README. Ticket input and password fields clear after submission.
 The host must support ticket v1 (Locho PR #91 or later). The app validates health
 identity/version before login. A peer connection alone is not API readiness.
 
-SDK pin: `0.1.0-dev.1`, source `4f8aa20c3bcbabb667ef2354510bdb101d690fa6`, CI run
-`38776038252`, artifact `locho-web-npm-package`, tarball SHA-256
-`5f4c1c87c34240567e8b9cd1d2472cc1b689e343089ebb17168d596b4df2cc7a`.
+SDK pin: `0.1.0-dev.2`, source `a509ccafc1bb8137aa6ac165f046d32c91f3de22`, CI run
+`38877468606`, artifact `locho-web-npm-package`, tarball SHA-256
+`88695d87443770c391463799ba00f6a09068fdb0b749b1b0a614f72b74ed797e`.
 The setup script verifies this hash; npm lock additionally pins integrity. Artifacts
 can expire: keep an immutable local copy and supply `LOCHO_SDK_ARCHIVE` when needed.
 No npm registry publication is assumed. Artifact upgrades require reviewed pin,
@@ -70,11 +70,11 @@ checksum and compatibility changes together.
   prevents automatic resurrection. Health/me validation precedes restored content.
   Async cleanup during page destruction is best effort. Tests dispatch persisted
   page events; actual BFCache entry is browser/environment-dependent and unproven.
-- The pinned SDK provides snapshots rather than subscriptions. A one-second poll
-  observes reconnecting transport while idle, hides notes and recreates/revalidates
-  the session after recovery. Busy operations are not polled/replayed. SDK status
-  subscriptions, real network-transition evidence and cross-tab coordination remain
-  future work. Tabs retain independent live state; changes in another tab are not
+- The dev.2 SDK provides Rust-watch-backed subscriptions. One owned observer
+  hides notes on reconnecting and recreates/revalidates after recovery; no interval
+  polling or mutation replay. Teardown unsubscribes before client close; generation
+  guards discard late callbacks. Real network-transition evidence and cross-tab
+  coordination remain future work. Tabs retain independent live state; changes in another tab are not
   broadcast and do not revoke its backend token.
 
 ## Verification and deployment

@@ -1,5 +1,14 @@
 # Next development and handoffs
 
+## SDK dev.2 integration
+
+Both notes apps now pin dev.2 artifacts from Locho PR #97. Browser observation uses
+an owned Rust-watch subscription instead of setInterval; Flutter unsubscribes before
+owner close without relying on the previous generator workaround. Local browser UI,
+controller tests and Android debug/release runtime acceptance pass. Next is broader
+JSON failure acceptance (host restart, interrupted writes and process/UI lifecycle),
+then deployment handoff and physical device/network evidence.
+
 ## Current slice — Flutter ownership hardening
 
 Flutter notes app now consumes the checksum-pinned source archive with foreground

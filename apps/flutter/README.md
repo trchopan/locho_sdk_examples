@@ -1,5 +1,12 @@
 # Flutter notes application
 
+## SDK dev.2 upgrade
+
+The pinned dev.2 archive includes bounded status unsubscribe. App teardown now
+awaits subscription cancellation before client close, with the same cleanup budgets;
+it no longer depends on owner close to unblock the status generator. Deterministic
+tests and Android debug/release acceptance pass with this order.
+
 ## Reliability hardening — 2026-10-16
 
 The controller now uses injectable ticket/client/attachment/HTTP dependencies,
@@ -37,9 +44,9 @@ python3 scripts/setup-flutter-sdk.py
 ```
 
 The script verifies the pinned archive SHA-256 before extracting to ignored `vendor/`:
-`288608ecc0c8eb72bd076dfca16e77c02a5e0a1d86adf85f272da34bb5426de5`.
-Artifact: Locho run `38831899415`, `locho-flutter-source-package`, version
-`0.1.0-dev.1`, source `0defbb54120e18360c7696052494c371a3640335`.
+`be944a6e24d5df8c55b6d3a142bbe11c78b16d8ceace9a9e3463736b19a22cad`.
+Artifact: Locho run `38877468589`, `locho-flutter-source-package`, version
+`0.1.0-dev.2`, source `a509ccafc1bb8137aa6ac165f046d32c91f3de22`.
 Its native/core Rust dependency is pinned to `4f8aa20c3bcbabb667ef2354510bdb101d690fa6`.
 GitHub artifact retention can expire; keep a copy with this checksum. Do not replace
 it silently with a new artifact bearing the same package version.

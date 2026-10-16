@@ -25,6 +25,8 @@ Future<void> acceptNotes(String ticket) async {
     await session.login('alice@example.test', 'alice-local-demo-only');
     debugPrint('NOTES_STAGE_CRUD');
     check(session.phase == 'notes');
+    // The app now unsubscribes before closing its SDK owner. This must finish
+    // even while the peer remains healthy with no new status revisions.
     await session.save('Flutter private', 'Unicode 🌍', null);
     check(session.notes.length == 1);
     final id = session.notes.single['id'] as String;

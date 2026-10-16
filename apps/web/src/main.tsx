@@ -14,8 +14,6 @@ const session = new Session(async (text) => {
 window.addEventListener('pagehide', () => session.suspend());
 window.addEventListener('pageshow', () => { void session.resume(); });
 void session.restore();
-// SDK exposes snapshots, not subscriptions. Poll while active without overlapping work.
-setInterval(() => { void session.observeTransport(); }, 1000);
 
 function App() {
   const state = useSyncExternalStore(session.subscribe, session.snapshot);
