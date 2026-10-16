@@ -17,7 +17,11 @@ Browser app now passes the memory-only production UI journey on local Chromium,
 Firefox and WebKit through public N0 using the pinned SDK tarball. Host CI builds
 the same 4f8aa20 revision. Flutter SDK source archives/external Android/iOS builds
 exist in Locho PR #95; the standalone Flutter notes application is not implemented.
-Physical mobile/HTTPS deployment acceptance and remembered sessions remain open.
+Opt-in IndexedDB sessions and page-event restoration now pass the 18-case local
+browser matrix; 11 controller tests exercise storage/recovery races and policy.
+Physical mobile/HTTPS deployment, actual BFCache entry and real network-transition
+acceptance remain open. SDK snapshots are polled while idle; status subscriptions
+are not available in this pinned SDK.
 
 Backend baseline verified on development macOS: clean `npm ci`, type checking,
 production build, all eight backend tests, OpenAPI/fixture validation, seed/reset,

@@ -17,6 +17,93 @@ async function login(page: Page, user: 'alice' | 'bob') {
   await expect(page.getByRole('heading', { name: `Notes for ${user}@example.test` })).toBeVisible();
 }
 
+async function savedCount(page: Page) {
+  return page.evaluate(async () => new Promise<number>((resolve, reject) => {
+    const open = indexedDB.open('locho-notes-v1', 1);
+    open.onerror = () => reject(new Error('storage'));
+    open.onsuccess = () => {
+      const db = open.result;
+      const tx = db.transaction('credentials', 'readonly');
+      const count = tx.objectStore('credentials').count();
+      tx.oncomplete = () => { const value = count.result; db.close(); resolve(value); };
+      tx.onerror = () => { db.close(); reject(new Error('storage')); };
+    };
+  }));
+}
+
+test('remembered login restores, remember off deletes and forget stays forgotten', async ({ page }) => {
+  await pair(page);
+  await page.getByLabel('Remember this device').check();
+  await login(page, 'alice');
+  await expect.poll(() => savedCount(page)).toBe(1);
+  await page.reload();
+  await expect(page.getByRole('heading', { name: 'Notes for alice@example.test' })).toBeVisible({ timeout: 35000 });
+  await expect(page.getByLabel('Remember this device')).toBeChecked();
+  // Real page events exercise ownership restoration, without relying on BFCache availability.
+  await page.evaluate(() => window.dispatchEvent(new PageTransitionEvent('pagehide', { persisted: true })));
+  await expect(page.getByRole('heading', { name: /^Notes for/ })).toHaveCount(0);
+  await page.evaluate(() => window.dispatchEvent(new PageTransitionEvent('pageshow', { persisted: true })));
+  await expect(page.getByRole('heading', { name: 'Notes for alice@example.test' })).toBeVisible({ timeout: 35000 });
+  await page.getByLabel('Remember this device').uncheck();
+  await expect.poll(() => savedCount(page)).toBe(0);
+  await expect(page.getByRole('heading', { name: 'Notes for alice@example.test' })).toBeVisible();
+  await page.reload(); await expect(page.getByRole('status')).toHaveText('unpaired');
+  await pair(page); await page.getByLabel('Remember this device').check(); await login(page, 'alice');
+  await page.getByRole('button', { name: 'Forget homelab', exact: true }).click();
+  await expect.poll(() => savedCount(page)).toBe(0);
+  await page.reload(); await expect(page.getByRole('status')).toHaveText('unpaired');
+});
+
+test('remembered logout removes token but retains pairing', async ({ page }) => {
+  await pair(page); await page.getByLabel('Remember this device').check(); await login(page, 'bob');
+  await page.getByRole('button', { name: 'Logout', exact: true }).click();
+  await expect(page.getByRole('alert')).toHaveText('Logged out. Reconnect to log in.');
+  await page.reload();
+  await expect(page.getByRole('heading', { name: 'Login' })).toBeVisible({ timeout: 35000 });
+  await expect(page.getByLabel('Remember this device')).toBeChecked();
+  await expect.poll(() => savedCount(page)).toBe(1);
+});
+
+test('blocked IndexedDB reports failure without breaking memory login', async ({ page }) => {
+  await page.addInitScript(() => {
+    Object.defineProperty(IDBFactory.prototype, 'open', { value: () => { throw new Error('Storage unavailable'); } });
+  });
+  await pair(page); await page.getByLabel('Remember this device').check(); await login(page, 'alice');
+  await expect(page.getByRole('alert')).toContainText('Storage failed.');
+  await expect(page.getByRole('heading', { name: 'Notes for alice@example.test' })).toBeVisible();
+});
+
+test('revoked remembered token returns to login and retains pairing', async ({ page }) => {
+  await pair(page); await page.getByLabel('Remember this device').check(); await login(page, 'alice');
+  // Keep a copy entirely in the browser to simulate a revoked saved token on next launch.
+  await page.evaluate(async () => {
+    (window as any).savedRecord = await new Promise((resolve) => {
+      const open = indexedDB.open('locho-notes-v1', 1);
+      open.onsuccess = () => {
+        const db = open.result, tx = db.transaction('credentials', 'readonly');
+        const rows = tx.objectStore('credentials').getAll();
+        tx.oncomplete = () => { db.close(); resolve(rows.result[0]); };
+      };
+    });
+  });
+  await page.getByRole('button', { name: 'Logout', exact: true }).click();
+  await expect(page.getByRole('alert')).toHaveText('Logged out. Reconnect to log in.');
+  await page.evaluate(async () => new Promise<void>((resolve) => {
+    const open = indexedDB.open('locho-notes-v1', 1);
+    open.onsuccess = () => {
+      const db = open.result, tx = db.transaction('credentials', 'readwrite');
+      tx.objectStore('credentials').put((window as any).savedRecord);
+      delete (window as any).savedRecord;
+      tx.oncomplete = () => { db.close(); resolve(); };
+    };
+  }));
+  await page.reload();
+  await expect(page.getByRole('alert')).toHaveText('Session expired. Reconnect to log in.', { timeout: 35000 });
+  await expect.poll(() => savedCount(page)).toBe(1);
+  await page.getByRole('button', { name: 'Reconnect', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Login' })).toBeVisible({ timeout: 35000 });
+});
+
 test('packaged SDK pairing login CRUD isolation reconnect logout and forget', async ({ page, browser }) => {
   await pair(page); await login(page, 'alice');
   await expect(page.getByLabel('Password', { exact: true })).toHaveCount(0);
