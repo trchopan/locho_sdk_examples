@@ -1,5 +1,10 @@
 # Compatibility baseline
 
+JSON failure acceptance now adds a 27-case local browser matrix and Flutter
+tap-driven CRUD, host/upstream faults and release process-restart restore on the
+Android ARM64 16 KiB emulator. See json-acceptance.md; these results do not establish
+physical iOS/mobile-browser or real network-transition acceptance.
+
 | Component | Baseline / evidence |
 | --- | --- |
 | Node / npm | 24.18.0 / 11.16.0 on development macOS |
