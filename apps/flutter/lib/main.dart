@@ -29,12 +29,24 @@ class _NotesScreenState extends State<NotesScreen> with WidgetsBindingObserver {
       title = TextEditingController(),
       body = TextEditingController();
   String? editing;
+  int editorRevision = 0;
   NotesSession get s => widget.session;
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    editorRevision = s.editorRevision;
+    s.addListener(clearObsoleteEditor);
     unawaited(s.restore());
+  }
+
+  void clearObsoleteEditor() {
+    if (editorRevision == s.editorRevision) return;
+    editorRevision = s.editorRevision;
+    editing = null;
+    title.clear();
+    body.clear();
+    password.clear();
   }
 
   @override
@@ -53,7 +65,8 @@ class _NotesScreenState extends State<NotesScreen> with WidgetsBindingObserver {
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
-    s.disconnect();
+    s.removeListener(clearObsoleteEditor);
+    unawaited(s.close());
     for (final c in [ticket, email, password, title, body]) {
       c.dispose();
     }
@@ -98,6 +111,12 @@ class _NotesScreenState extends State<NotesScreen> with WidgetsBindingObserver {
             onChanged: (value) => unawaited(s.setRemember(value)),
           ),
           if (s.storageError.isNotEmpty) Text(s.storageError),
+          if (s.storageBusy) const Text('Updating saved credentials…'),
+          if (s.storageError.isNotEmpty)
+            TextButton(
+              onPressed: s.storageBusy ? null : () => unawaited(s.persist()),
+              child: const Text('Retry storage'),
+            ),
           field('Attachment ticket', ticket, secret: true),
           Wrap(
             children: [
