@@ -4,6 +4,7 @@ export interface Transport {
   fetch(path: string, options?: { method?: 'GET' | 'POST' | 'PATCH' | 'DELETE'; headers?: Record<string, string>; body?: string; signal?: AbortSignal; timeoutMs?: number }): Promise<Response>;
   close(): Promise<void>;
   readonly status?: { state: string };
+  subscribeStatus?(listener: (status: { state: string }) => void, options?: { onError?: () => void }): () => Promise<void>;
 }
 import type { CredentialStore, SavedSession } from './storage';
 export interface Pairing { key: string; label: string; connect(signal: AbortSignal): Promise<Transport>; export?(): string }
@@ -33,6 +34,7 @@ export class Session {
   private suspended = false;
   private restoring?: Promise<void>;
   private recovering = false;
+  private unsubscribe?: () => Promise<void>;
   constructor(private parse: (value: string) => Promise<Pairing>, private store?: CredentialStore) {}
   subscribe = (listener: () => void) => { this.listeners.add(listener); return () => { this.listeners.delete(listener); }; };
   snapshot = () => this.state;
@@ -40,7 +42,10 @@ export class Session {
   private invalidate(close = true) {
     this.generation++; this.cancel.abort(); this.cancel = new AbortController();
     const client = this.client; this.client = undefined;
-    if (close) this.teardown = this.teardown.then(async () => { await client?.close(); }).catch(() => {});
+    const unsubscribe = this.unsubscribe; this.unsubscribe = undefined;
+    this.teardown = this.teardown.then(async () => {
+      try { await unsubscribe?.(); } finally { if (close) await client?.close(); }
+    }).catch(() => {});
     return this.generation;
   }
   private current(generation: number) { if (generation !== this.generation) throw new Obsolete(); }
@@ -108,13 +113,13 @@ export class Session {
     this.suspended = false;
     if (this.desired && this.pairing && !this.client && !this.state.busy) await this.reconnect();
   }
-  async observeTransport() {
-    if (!this.desired || this.suspended || this.state.busy || !this.client?.status) return;
-    const state = this.client.status.state;
+  async observeTransport(status = this.client?.status, generation = this.generation) {
+    if (generation !== this.generation || !this.desired || this.suspended || !status) return;
+    const state = status.state;
     if (state === 'reconnecting' || state === 'connecting') {
       this.recovering = true;
       this.update({ phase: 'disconnected', notes: [], user: undefined, message: 'Transport reconnecting. Requests are not replayed.' });
-    } else if (this.recovering && state === 'connected') {
+    } else if (this.recovering && state === 'connected' && !this.state.busy) {
       this.recovering = false;
       await this.reconnect(); // Fresh health/me validation, never an old mutation.
     } else if (state === 'failed' || state === 'closed') {
@@ -151,6 +156,11 @@ export class Session {
       this.current(generation);
       await this.persist(); this.current(generation);
       this.update({ phase: this.auth ? 'notes' : 'login', busy: false, user: this.auth?.user });
+      this.unsubscribe = client.subscribeStatus?.((status) => {
+        void this.observeTransport(status, generation);
+      }, { onError: () => {
+        if (generation === this.generation) { this.disconnect(); this.update({ message: 'Status observation stopped. Reconnect explicitly.' }); }
+      } });
     } catch (error) {
       if (generation !== this.generation) return;
       this.client = undefined; await client?.close().catch(() => {});
@@ -204,7 +214,12 @@ export class Session {
         ? error.status === 401 ? 'Login required or credentials rejected.' : `API request rejected (HTTP ${error.status}).`
         : mutation ? 'Write outcome unknown. Refresh to confirm; the request was not replayed.' : 'Request failed. Check the connection and refresh or reconnect.';
       this.update({ message });
-    } finally { if (generation === this.generation) this.update({ busy: false }); }
+    } finally {
+      if (generation === this.generation) {
+        this.update({ busy: false });
+        if (this.recovering) void this.observeTransport();
+      }
+    }
   }
   login(email: string, password: string) { return this.action(async (g) => {
     const data = await this.call('/auth/login', g, false, 'POST', { email, password });

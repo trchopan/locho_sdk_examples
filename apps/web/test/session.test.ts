@@ -2,6 +2,27 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { Session, type Transport } from '../src/session.js';
 
+test('owned subscription replaces polling and stale callbacks cannot resurrect forget', async () => {
+  let listener: ((status: { state: string }) => void) | undefined;
+  let cancelled = 0, connections = 0;
+  const client: Transport = {
+    close: async () => {},
+    subscribeStatus: (callback) => { listener = callback; return async () => { cancelled++; }; },
+    fetch: async (path) => path === '/health' ? Response.json({ service: 'locho-notes', apiVersion: 1 }) : Response.json({ notes: [] }),
+  };
+  const session = new Session(async () => ({ key: 'scope', label: 'api', connect: async () => { connections++; return client; } }));
+  await session.pair('ticket');
+  const old = listener!;
+  old({ state: 'reconnecting' }); assert.equal(session.state.phase, 'disconnected');
+  old({ state: 'connected' });
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.equal(connections, 2); assert.equal(cancelled, 1);
+  await session.forget();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  old({ state: 'connected' });
+  assert.equal(session.state.phase, 'unpaired'); assert.equal(cancelled, 2);
+});
+
 test('late connect is closed and cannot resurrect forgotten pairing', async () => {
   let resolve!: (value: Transport) => void;
   let closed = 0;

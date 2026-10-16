@@ -63,15 +63,15 @@ class NotesSession extends ChangeNotifier {
     TunnelClient? client,
     StreamSubscription<LochoState>? watch,
   ) async {
-    // Client close ends the pinned SDK's async status generator before cancellation.
+    // dev.2 unsubscribe is independent of owner close and bounded by one bridge wait.
     bool failed = false;
     try {
-      await client?.close().timeout(dependencies.cleanupTimeout);
+      await watch?.cancel().timeout(dependencies.cleanupTimeout);
     } catch (_) {
       failed = true;
     }
     try {
-      await watch?.cancel().timeout(dependencies.cleanupTimeout);
+      await client?.close().timeout(dependencies.cleanupTimeout);
     } catch (_) {
       failed = true;
     }
