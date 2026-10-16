@@ -3,8 +3,9 @@
 Full Flutter and browser application demonstrations sharing one reference notes
 API. SDKs and tiny package smoke apps are maintained in the separate `locho`
 repository. This repository currently implements the backend/API-contract baseline;
-the memory-only `apps/web` notes application now consumes a pinned SDK tarball.
-The full Flutter app and remembered-session/recovery slice remain follow-ups.
+the `apps/web` notes application consumes a pinned SDK tarball, with opt-in IndexedDB
+sessions and validated restoration. The full Flutter app and physical mobile/
+deployment acceptance remain follow-ups.
 
 ## Quick start
 

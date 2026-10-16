@@ -1,10 +1,12 @@
 # Next development and handoffs
 
-## Current slice — memory-only browser notes
+## Current slice — remembered browser sessions and recovery
 
-apps/web now uses a checksum-pinned packaged browser SDK and canonical API v1 for
-pair/health/login/notes/logout. Local six-case production UI matrix and controller
-tests pass. Remembered sessions/storage/recovery and Flutter full app remain next.
+apps/web uses a checksum-pinned packaged SDK and API v1 for pair/health/login/CRUD.
+Opt-in IndexedDB storage, validated restore, remember-off deletion, forget races,
+revoked tokens, storage failure and page-event ownership now pass 18 production UI
+tests and 11 controller tests locally. SDK status subscriptions and actual mobile/
+BFCache/network/deployment evidence remain open. Flutter full app is the next major slice.
 The GitHub remote and examples CI now exist. Historical slice table below describes
 the dependency sequence, not current completion of all acceptance gates.
 

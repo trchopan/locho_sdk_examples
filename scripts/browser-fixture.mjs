@@ -10,7 +10,9 @@ export default async function setup() {
   const binary = process.env.LOCHO_BINARY;
   if (!binary) throw new Error('LOCHO_BINARY must point to the pinned built CLI');
   const directory = await mkdtemp(join(tmpdir(), 'notes-browser-'));
-  const { app, db } = await createApp();
+  // One fixture serves all browser projects; avoid exercising the production login
+  // limiter accidentally as the UI suite grows (limiter behavior has backend tests).
+  const { app, db } = await createApp({ loginAttempts: 1000 });
   let host;
   const cleanup = async () => {
     if (host?.pid && host.exitCode === null && host.signalCode === null) {

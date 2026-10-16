@@ -1,6 +1,6 @@
 # Browser notes application
 
-Memory-only React/TypeScript application consuming the packaged `@locho/web` SDK,
+React/TypeScript application with opt-in remembered sessions consuming the packaged `@locho/web` SDK,
 not repository source or generated WASM internals. Uses the canonical API v1 in
 `../../contracts`; no separate backend implementation.
 
@@ -36,7 +36,20 @@ checksum and compatibility changes together.
 
 ## Application behavior
 
-- Ticket and backend token remain in memory only. Fresh page loads start unpaired.
+- Remember disabled: ticket/token remain in memory only; fresh loads start unpaired.
+  Remember enabled: an IndexedDB v1 record stores ticket and optional backend auth,
+  keyed by full host/service/type. One selected pairing is retained; switching scopes
+  replaces the record atomically rather than forwarding another attachment's token.
+  Passwords and notes are never persisted. All scripts on this origin can access
+  stored credentials: IndexedDB is not HttpOnly isolation or encryption.
+- Startup restores only after health identity/version and `/api/me` validation.
+  Invalid/expired/revoked auth removes the saved token while keeping pairing.
+- Turning remember off removes persisted ticket/token while retaining the current
+  live session. Forget removes the record and memory state. Writes are serialized,
+  obsolete queued saves are discarded, and in-flight writes precede the final delete.
+  Storage failure is visible and offers retry; deletion failure means saved values
+  may remain. Clear site data if removal cannot complete. Private browsing, eviction,
+  site-data clearing and inaccessible/invalid records can require pairing again.
 - Disconnect closes transport, retains pairing/token in the current tab, and hides
   notes. Explicit reconnect rechecks health and `/api/me` before restoring notes.
 - Logout removes the local token even offline; reachable logout revokes the current
@@ -52,9 +65,17 @@ checksum and compatibility changes together.
 - Request deadline is 15 seconds; SDK response limit is 8 MiB. Contract bounds are
   100 notes, title 200 scalar values, body 16000 UTF-8 bytes. React renders text,
   never backend HTML.
-- `pagehide` disconnects. Restoration requires explicit reconnect. Automatic
-  background/recovery monitoring, BFCache auto-restore, status subscriptions and
-  remembered sessions are follow-ups, not claims of this memory-only slice.
+- `pagehide` aborts work and closes the client, retaining explicit connection intent.
+  `pageshow` reconnects only when that intent survives; disconnect/logout/forget
+  prevents automatic resurrection. Health/me validation precedes restored content.
+  Async cleanup during page destruction is best effort. Tests dispatch persisted
+  page events; actual BFCache entry is browser/environment-dependent and unproven.
+- The pinned SDK provides snapshots rather than subscriptions. A one-second poll
+  observes reconnecting transport while idle, hides notes and recreates/revalidates
+  the session after recovery. Busy operations are not polled/replayed. SDK status
+  subscriptions, real network-transition evidence and cross-tab coordination remain
+  future work. Tabs retain independent live state; changes in another tab are not
+  broadcast and do not revoke its backend token.
 
 ## Verification and deployment
 
@@ -66,9 +87,11 @@ LOCHO_BINARY=/absolute/path/to/pinned/locho npm run test:browser
 
 The browser fixture creates an isolated backend/database and users, starts a real
 CLI host with public N0 discovery, generates a fresh ticket and cleans up resources.
-Six production UI tests pass locally across Chromium/Firefox/WebKit: CRUD, isolation,
-reconnect, logout/forget, malformed ticket and failed login. Controller tests cover
-late-connect cleanup, interrupted writes, 401 and token scoping. No screenshots,
+Eighteen production UI tests pass locally across Chromium/Firefox/WebKit: CRUD,
+isolation, reconnect, logout/forget, malformed tickets, failed login, IndexedDB
+restore/deletion, revoked saved tokens, storage failure and page-event restoration.
+Eleven controller tests cover late-connect cleanup, interrupted writes, 401/token
+scoping, storage races, remember-off, failed deletion and recovery policy. No screenshots,
 video or traces are collected because pairing/auth screens contain credentials.
 This uses public infrastructure and can fail during N0 outages. It is not controlled
 relay, physical mobile browser or HTTPS deployment acceptance.
@@ -76,5 +99,6 @@ relay, physical mobile browser or HTTPS deployment acceptance.
 Deploy `apps/web/dist` as static assets over HTTPS. Serve `.wasm` with
 `application/wasm`; CSP must permit modules/WebAssembly compilation and HTTPS/WSS
 N0 discovery/relays. Keep third-party scripts and analytics off credential pages.
-The API remains private behind Locho, not public ingress. IndexedDB, QR, full
-storage/page recovery, SSE/WebSockets and Flutter notes app remain later milestones.
+The API remains private behind Locho, not public ingress. QR, SDK status subscriptions,
+real mobile/HTTPS/BFCache/network acceptance, SSE/WebSockets and the Flutter notes
+application remain later milestones.
