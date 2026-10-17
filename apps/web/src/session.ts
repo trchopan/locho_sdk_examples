@@ -65,8 +65,9 @@ export class Session {
   }
   private async clearAuth(g: number) {
     this.current(g); this.stopEvents(); this.auth = undefined; this.dirty = false; this.loading = undefined;
-    this.update({ phase: 'login', user: undefined, notes: [] });
+    this.update({ user: undefined, notes: [] });
     await this.persist(); this.current(g);
+    this.update({ phase: 'login' });
   }
   private async startEvents(g: number) {
     await this.eventsCleanup; this.current(g);
@@ -198,11 +199,18 @@ export class Session {
       const health = await this.call('/health', generation, false);
       if (health?.service !== 'locho-notes' || health?.apiVersion !== 1) throw new Error('Wrong API');
       if (this.auth) {
-        const me = await this.call('/api/me', generation);
-        if (!me?.user || typeof me.expiresAt !== 'string') throw new Error('Malformed API');
-        this.auth = { ...this.auth, user: me.user, expiresAt: me.expiresAt };
-        await this.startEvents(generation);
-        if (this.auth) await this.load(generation);
+        try {
+          const me = await this.call('/api/me', generation);
+          if (!me?.user || typeof me.expiresAt !== 'string') throw new Error('Malformed API');
+          this.auth = { ...this.auth, user: me.user, expiresAt: me.expiresAt };
+        } catch (error) {
+          if (!(error instanceof ApiError && error.status === 401)) throw error;
+          this.current(generation); // call() removed invalid auth and persisted pairing.
+        }
+        if (this.auth) {
+          await this.startEvents(generation);
+          if (this.auth) await this.load(generation);
+        }
       }
       this.current(generation);
       await this.persist(); this.current(generation);

@@ -12,8 +12,6 @@
   },
   "packageManager": "npm@11.16.0",
   "scripts": {
-    "sdk:setup": "node scripts/setup-browser-sdk.mjs",
-    "test:artifacts": "node scripts/test-artifact-setup.mjs",
     "test:deployment": "node scripts/verify-deployment.mjs",
     "dev:web": "npm run dev --workspace @locho-examples/web",
     "test:browser": "playwright test",

@@ -64,6 +64,16 @@ test('idle session expiry clears login and saved token while retaining pairing',
   await command(request, 'events-expire');
   await expect(page.getByRole('heading', { name: 'Login', exact: true })).toBeVisible({ timeout: 20000 });
   await expect.poll(async () => (await command(request)).eventStreams).toBe(0);
+  await expect.poll(() => page.evaluate(() => new Promise<boolean>((resolve, reject) => {
+    const open = indexedDB.open('locho-notes-v1', 1);
+    open.onerror = () => reject(new Error('storage'));
+    open.onsuccess = () => {
+      const db = open.result, tx = db.transaction('credentials', 'readonly');
+      const rows = tx.objectStore('credentials').getAll();
+      tx.oncomplete = () => { const values = rows.result; db.close(); resolve(values.length === 1 && values[0].auth === undefined); };
+      tx.onerror = () => { db.close(); reject(new Error('storage')); };
+    };
+  }))).toBe(true);
   await page.reload();
   await expect(page.getByRole('heading', { name: 'Login', exact: true })).toBeVisible({ timeout: 35000 });
   await page.getByRole('button', { name: 'Forget homelab', exact: true }).click();

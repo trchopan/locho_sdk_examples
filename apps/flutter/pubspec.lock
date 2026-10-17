@@ -282,10 +282,11 @@ packages:
   locho_flutter:
     dependency: "direct main"
     description:
-      path: "../../vendor/locho_flutter"
-      relative: true
-    source: path
-    version: "0.1.0-dev.2"
+      name: locho_flutter
+      sha256: "40d69471f0a0fe99bf19788eb260e428d30fc1124c4cfdede6bbef6172eb0234"
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.1.0-beta.1"
   logging:
     dependency: transitive
     description:

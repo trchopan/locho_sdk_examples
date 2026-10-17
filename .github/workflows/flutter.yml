@@ -16,12 +16,6 @@ jobs:
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v7
-      - uses: actions/setup-python@v6
-        with:
-          python-version: '3.14'
-      - run: python3 scripts/setup-flutter-sdk.py
-        env:
-          GH_TOKEN: ${{ github.token }}
       - uses: dtolnay/rust-toolchain@1.96.0
       - uses: actions/setup-java@v5
         with:

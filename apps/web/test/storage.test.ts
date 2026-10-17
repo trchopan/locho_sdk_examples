@@ -71,7 +71,30 @@ test('invalid saved session removes only token and persists pairing', async () =
   });
   await session.restore();
   assert.equal(record?.ticket, 'synthetic-ticket'); assert.equal(record?.auth, undefined);
+  assert.equal(session.state.phase, 'login'); assert.equal(session.state.busy, false);
   assert.deepEqual(session.state.notes, []);
+});
+
+test('expiry hides private content immediately but exposes login only after token removal settles', async () => {
+  let record: SavedSession | undefined = { version: 1, key: 'scope', ticket: 'synthetic-ticket', auth };
+  let invalid = false, blocked = false;
+  let release!: () => void;
+  const pending = new Promise<void>((resolve) => { release = resolve; });
+  const client: Transport = { close: async () => {}, fetch: async (path) => {
+    if (path === '/health') return Response.json({ service: 'locho-notes', apiVersion: 1 });
+    if (invalid) return new Response(null, { status: 401 });
+    return Response.json(path === '/api/me' ? { user: auth.user, expiresAt: auth.expiresAt } : { notes: [] });
+  } };
+  const session = new Session(async () => ({ key: 'scope', label: 'api', export: () => 'synthetic-ticket', connect: async () => client }), {
+    read: async () => record, replace: async (value) => { if (blocked) await pending; record = value; },
+  });
+  await session.restore(); invalid = true; blocked = true;
+  const refresh = session.refresh();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.equal(session.state.user, undefined); assert.deepEqual(session.state.notes, []);
+  assert.notEqual(session.state.phase, 'login'); assert.equal(session.state.storageBusy, true);
+  release(); await refresh;
+  assert.equal(record?.auth, undefined); assert.equal(session.state.phase, 'login');
 });
 
 test('transport recovery validates health/session and does not replay writes', async () => {

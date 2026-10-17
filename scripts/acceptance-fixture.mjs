@@ -27,10 +27,20 @@ export async function acceptanceFixture(binary, { eventsTickMs = 100 } = {}) {
   const { app, db } = await createApp({ loginAttempts: 1000, eventsTickMs });
   let host, apiPort, proxyPort, interrupt;
   let mutations = 0, dropped = 0;
+  let healthReceived = 0, healthFinished = 0;
   const eventResponses = new Set();
   let eventsPaused = false;
   const forwarded = new Set();
   const proxy = createServer((incoming, outgoing) => {
+    if (incoming.url === '/health') {
+      healthReceived++;
+      outgoing.on('finish', () => { healthFinished++; });
+    }
+    if (process.env.LOCHO_DIAGNOSTICS === '1' && incoming.url === '/health') {
+      console.log('[boundary] health received');
+      outgoing.on('finish', () => console.log('[boundary] health response finished'));
+      outgoing.on('close', () => console.log('[boundary] health connection closed'));
+    }
     if (incoming.url === '/api/events') {
       if (eventsPaused) { outgoing.writeHead(503).end(); return; }
       eventResponses.add(outgoing);
@@ -61,6 +71,14 @@ export async function acceptanceFixture(binary, { eventsTickMs = 100 } = {}) {
   const env = { ...process.env, LOCHO_STATE_DIR: join(directory, 'state') };
   async function startHost() {
     host = spawn(binary, ['host', '--config', config], { env, stdio: ['ignore', 'pipe', 'pipe'] });
+    if (process.env.LOCHO_DIAGNOSTICS === '1') {
+      host.stderr.on('data', (chunk) => {
+        for (const line of chunk.toString().split('\n')) {
+          if (line.includes('authenticated TCP stream accepted')) console.log('[boundary] service authorized');
+          if (line.includes('TCP tunnel relay failed')) console.log('[boundary] TCP relay failed');
+        }
+      });
+    }
     await new Promise((resolve, reject) => {
       let output = '';
       const finish = (error) => {
@@ -93,7 +111,7 @@ export async function acceptanceFixture(binary, { eventsTickMs = 100 } = {}) {
     else if (action === 'events-resume') eventsPaused = false;
     else if (action === 'events-expire') db.prepare('UPDATE sessions SET expires_at = 0').run();
     else if (action !== 'status') throw new Error('Unknown fixture action');
-    return { mutations, dropped, eventStreams: eventResponses.size, upstream: proxy.listening, host: Boolean(host?.pid && host.exitCode === null && host.signalCode === null) };
+    return { mutations, dropped, healthReceived, healthFinished, eventStreams: eventResponses.size, upstream: proxy.listening, host: Boolean(host?.pid && host.exitCode === null && host.signalCode === null) };
   }
   let queue = Promise.resolve();
   const control = createServer((request, response) => {
@@ -115,9 +133,27 @@ export async function acceptanceFixture(binary, { eventsTickMs = 100 } = {}) {
     await addUser(db, 'bob@example.test', 'bob-local-demo-only');
     const address = await app.listen({ host: '127.0.0.1', port: 0 }); apiPort = Number(new URL(address).port);
     proxyPort = await listen(proxy);
-    await writeFile(config, `[[services]]\nname = "sample-api"\ntype = "tcp"\nendpoint = "127.0.0.1:${proxyPort}"\n`);
+    const servicePort = process.env.LOCHO_FIXTURE_DIRECT_API === '1' ? apiPort : proxyPort;
+    await writeFile(config, `[[services]]\nname = "sample-api"\ntype = "tcp"\nendpoint = "127.0.0.1:${servicePort}"\n`);
     await startHost();
-    const { stdout } = await exec(binary, ['share', 'sample-api', '--config', config, '--ticket'], { env, timeout: 20000 });
+    const hints = [];
+    if (process.env.LOCHO_FIXTURE_RELAY_HINT === '1') {
+      const host = await exec(binary, ['share', 'sample-api', '--config', config], { env, timeout: 20000 });
+      const hostId = host.stdout.match(/locho attach (\S+)/)?.[1];
+      if (!hostId) throw new Error('Fixture host identity unavailable');
+      let relay;
+      for (let attempt = 0; attempt < 6 && !relay; attempt++) {
+        try {
+          const result = await exec(binary, ['diagnose', '--host-id', hostId], { env, timeout: 30000 });
+          relay = (result.stdout + result.stderr).match(/relay:\s+(https:\/\/[^)\s]+)/)?.[1];
+        } catch { /* Initial public discovery publication may not be visible yet. */ }
+        if (!relay && attempt < 5) await new Promise((resolve) => setTimeout(resolve, 2000));
+      }
+      if (!relay) throw new Error('Fixture relay not ready');
+      const url = new URL(relay); url.hostname = url.hostname.replace(/\.$/, '');
+      hints.push('--peer-relay-url', url.toString());
+    }
+    const { stdout } = await exec(binary, ['share', 'sample-api', '--config', config, '--ticket', ...hints], { env, timeout: 20000 });
     const controlPort = await listen(control);
     return { ticket: stdout.trim(), controlUrl: `http://127.0.0.1:${controlPort}`, cleanup };
   } catch (error) { await cleanup(); throw error; }

@@ -43,6 +43,12 @@ are invalidations, not database replication or mutation acknowledgments.
 
 ## Evidence and rollout
 
+The 2026-10-17 registry beta rerun is recorded in registry-acceptance.md. Both apps
+now consume published 0.1.0-beta.1 SDKs. Historical dev-package results below are
+retained separately. The latest browser matrix passes after restore persistence/401
+fixes; earlier post-reload health-check timeouts remain unexplained. Android and
+cross-platform event acceptance pass.
+
 Live localhost HTTP tests prove events arrive while the stream remains open,
 CRUD operation framing, two-user isolation, no replay, admission rejection,
 capacity reclamation, session-specific logout, idle expiry and active shutdown.

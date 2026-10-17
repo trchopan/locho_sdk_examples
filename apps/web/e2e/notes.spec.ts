@@ -98,10 +98,8 @@ test('revoked remembered token returns to login and retains pairing', async ({ p
     };
   }));
   await page.reload();
-  await expect(page.getByRole('alert')).toHaveText('Session expired. Reconnect to log in.', { timeout: 35000 });
-  await expect.poll(() => savedCount(page)).toBe(1);
-  await page.getByRole('button', { name: 'Reconnect', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Login' })).toBeVisible({ timeout: 35000 });
+  await expect.poll(() => savedCount(page)).toBe(1);
 });
 
 test('packaged SDK pairing login CRUD isolation reconnect logout and forget', async ({ page, browser }) => {

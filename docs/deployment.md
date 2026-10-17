@@ -1,6 +1,6 @@
 # Deployment and reproducible handoff
 
-## Prerequisites and artifact retention
+## Prerequisites and registry dependencies
 
 Use Node 24.18.0, npm 11.16.0 and Docker Compose v2+ with support for health-based
 dependencies and `up --wait`. Images are version-tagged; Locho source is additionally
@@ -9,35 +9,20 @@ OS package repositories are not immutable digests; these Docker builds are repea
 instructions, not hermetic/reproducible-bit guarantees. Record built image IDs for
 your deployment and review base-image updates deliberately.
 
-Before installing the Node workspaces, supply the pinned browser SDK:
+Install the Node workspaces directly from npm:
 
 ```sh
-npm run sdk:setup
 npm ci
 npm run check
 ```
 
-Artifact resolution order is explicit local archive, verified local cache, HTTPS
-mirror URL (when configured), then the pinned GitHub Actions run. Checksums always
-remain those in compatibility.md and setup scripts; a corrupt cache fails closed
-rather than silently selecting another package. Flutter uses the equivalent setup
-script before `flutter pub get`.
-
-```sh
-LOCHO_SDK_ARCHIVE=/retained/locho-web-0.1.0-dev.3.tgz npm run sdk:setup
-LOCHO_FLUTTER_ARCHIVE=/retained/locho_flutter-0.1.0-dev.2.tar.gz python3 scripts/setup-flutter-sdk.py
-# Or an operator-maintained immutable HTTPS location serving those exact bytes:
-LOCHO_SDK_URL=https://artifacts.example.org/sdk/locho-web-0.1.0-dev.3.tgz npm run sdk:setup
-LOCHO_FLUTTER_URL=https://artifacts.example.org/sdk/locho_flutter-0.1.0-dev.2.tar.gz python3 scripts/setup-flutter-sdk.py
-```
-
-The example hostname above is a placeholder, not a deployed service. Mirror
-redirects are rejected and downloads are bounded to 16 MiB. Keep both original
-archives, SHA-256 values and their CI/source provenance in durable operator-owned
-storage before GitHub retention expires. This change provides the verified mirror
-mechanism; it does not publish releases or provision a permanent artifact service.
-Neither archive contains deployment/user credentials. Never put generated tickets
-or backend tokens in the artifact store.
+The browser pins `locho_web` 0.1.0-beta.1 and the root npm lockfile records its
+registry URL/SHA-512 integrity. Flutter pins `locho_flutter` 0.1.0-beta.1 from pub.dev;
+run `flutter pub get` in `apps/flutter` using its committed hosted-package lockfile.
+No SDK archives, vendor extraction or GitHub credentials are needed. Package-manager
+caches can accelerate repeated installs; cold installs require registry access.
+Flutter's SDK bundles Locho Rust sources but still needs the documented Rust/native
+build toolchains. See compatibility.md for exact versions/checksums and acceptance.
 
 ## Private API and host via Compose
 
@@ -99,7 +84,6 @@ routing together. General package `/sdk/` support was verified separately in Loc
 ```sh
 npm run build
 npx playwright install chromium firefox webkit
-npm run test:artifacts
 npm run test:deployment
 ```
 

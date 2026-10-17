@@ -16,9 +16,6 @@ jobs:
         with:
           node-version: '24.18.0'
           cache: npm
-      - run: npm run sdk:setup
-        env:
-          GH_TOKEN: ${{ github.token }}
       - run: npm ci
       - run: npm run check
       - uses: actions/checkout@v7

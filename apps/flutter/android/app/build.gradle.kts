@@ -23,6 +23,10 @@ android {
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
+        // Match the native SDK's supported ABIs, including transitive JNI assets.
+        ndk {
+            abiFilters += listOf("arm64-v8a", "x86_64")
+        }
     }
 
     buildTypes {
@@ -30,6 +34,13 @@ android {
             // TODO: Add your own signing config for the release build.
             // Signing with the debug keys for now, so `flutter run --release` works.
             signingConfig = signingConfigs.getByName("debug")
+        }
+    }
+
+    packaging {
+        jniLibs {
+            // Transitive AAR JNI assets can bypass the native build ABI filters.
+            excludes += setOf("lib/armeabi-v7a/**", "lib/x86/**")
         }
     }
 }
