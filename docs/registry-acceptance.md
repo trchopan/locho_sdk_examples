@@ -1,5 +1,28 @@
 # Registry SDK acceptance — 2026-10-17
 
+## Candidate host rerun — `1.3.0-beta.1`
+
+Examples CI and private Compose now build Locho merge
+`3786da3127338b2530e0cd8cea8ef23bc6d55dfd`, reporting
+`locho 1.3.0-beta.1` with clean provenance. The registry SDK pins and checksums
+are unchanged.
+
+- API/contract checks, production build and 12 API / 21 browser unit tests passed.
+- Candidate binary real TCP health/login/notes/incremental-SSE smoke passed.
+- The full local browser run had 34/36 active tests pass on its first public-N0
+  attempt; the two initial Chromium/Firefox health/restore failures passed focused
+  reruns. Three deployment-only cases were skipped in this mode.
+- Candidate-pinned private Compose and Caddy internal-CA HTTPS/CSP/WASM acceptance
+  passed all 6 Chromium/Firefox/WebKit cases.
+- Flutter `pub get --enforce-lockfile`, formatting, analyze, 28 unit/widget tests,
+  and Android ARM64/x86_64 debug/release builds passed. No Android emulator was
+  attached for this rerun; emulator/physical runtime evidence remains separate.
+- The Docker candidate build fetched and verified the exact full merge SHA.
+
+This rerun confirms the final host revision is compatible with the published SDK
+betas and examples. Public-N0 intermittent readiness/restore behavior remains an
+environment-dependent limitation, not a candidate-specific regression.
+
 ## Package pins and installation
 
 - Browser: `locho_web` **0.1.0-beta.1** from npm. Root package-lock.json pins
@@ -40,7 +63,10 @@ Local toolchain: Node 24.18.0/npm 11.16.0, Flutter 3.44.5/Dart 3.12.2,
 Android NDK 28.2.13676358, Docker Engine 29.6.1. Runtime device: emulator-5554,
 Android 17/API 37, arm64-v8a, 16384-byte pages. Local host binary reports Locho
 1.2.0, clean commit `52d903e612aaca6d88b780c92e3fe72d76fa693a`.
-Compose/CI host source remains pinned to `4f8aa20c3bcbabb667ef2354510bdb101d690fa6`.
+Earlier Compose/CI acceptance used host source `4f8aa20c3bcbabb667ef2354510bdb101d690fa6`.
+The current candidate handoff pins Compose/CI to Locho `1.3.0-beta.1`, merge
+`3786da3127338b2530e0cd8cea8ef23bc6d55dfd`; candidate rerun results are recorded
+below and in the branch CI.
 These results are local evidence; hosted CI verifies the migration separately.
 
 Android packaging explicitly restricts native ABIs to ARM64/x86_64 and excludes
