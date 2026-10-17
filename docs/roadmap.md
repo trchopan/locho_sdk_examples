@@ -1,12 +1,19 @@
 # Development roadmap and handoffs
 
-## Current milestone: live note updates
+## Current milestone: registry beta acceptance
+
+Both apps pin public `0.1.0-beta.1` SDKs and install through npm/pub.dev with
+committed lockfiles. Archive download/bootstrap steps have been removed from setup,
+CI and Docker. Restore persistence/401 fixes and the latest green browser matrix are
+recorded in registry-acceptance.md, alongside historical unexplained timeouts.
+
+## Live note updates
 
 - Backend authenticated `/api/events` and OpenAPI 1.1.0 merged in examples #8:
   scoped committed invalidations, bounded subscribers/backpressure, heartbeat,
   logout/expiry checks and no replay.
 - Browser streaming transport merged in Locho #98: bounded pull-driven response
-  bodies and setup/idle deadlines. This app pins the verified dev.3 tarball.
+  bodies and setup/idle deadlines, now distributed in the npm beta.
 - Browser app now parses bounded SSE, coalesces canonical refresh, recovers missed
   changes after health/me validation and subscription, preserves drafts and unknown
   write messages, and cancels event readers/retry timers with session ownership.
@@ -19,7 +26,7 @@ refresh/retry/auth policies match the browser. Android ARM64 16 KiB emulator plu
 production Chromium pass bidirectional live CRUD, isolation, missed-change refresh,
 draft retention, suspend/resume, logout/expiry and 65s real-heartbeat stability.
 Host restart/interrupted writes and autonomous release acceptance also pass.
-Flutter retains dev.2; no new native transport API is required. See events.md.
+Flutter uses the pub.dev beta; no new native streaming API is required. See events.md.
 
 ## Then: streaming acceptance and WebSockets
 
@@ -42,7 +49,8 @@ and deployment.md for exact evidence and limitations.
 
 - Physical Android/iOS and real mobile-browser runtime matrices.
 - Actual BFCache, storage/network transitions and live relay migration.
-- Controlled authenticated relays, public DNS/ACME and durable artifact hosting.
+- Controlled authenticated relays and public DNS/ACME.
+- Browser restore/initial-health timeouts over public N0; see registry-acceptance.md.
 
 SDK repository `locho` owns shared Rust/session/native code, SDK APIs, packages and
 external consuming-app checks. This repository owns canonical contracts/backend,

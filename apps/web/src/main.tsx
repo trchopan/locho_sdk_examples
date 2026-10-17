@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useSyncExternalStore } from 'react';
 import { createRoot } from 'react-dom/client';
-import { LochoClient, LochoTicket } from '@locho/web';
+import { LochoClient, LochoTicket } from 'locho_web';
 import { Session, type Note } from './session';
 import { IndexedCredentials } from './storage';
 import './style.css';

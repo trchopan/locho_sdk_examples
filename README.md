@@ -2,11 +2,11 @@
 
 Full Flutter and browser application demonstrations sharing one reference notes
 API. SDKs and tiny package smoke apps are maintained in the separate `locho`
-repository. This repository currently implements the backend/API-contract baseline;
-the `apps/web` notes application consumes a pinned SDK tarball, with opt-in IndexedDB
-sessions and validated restoration. `apps/flutter` uses a pinned source archive for
-foreground notes and opt-in secure storage. Physical-device and deployment
-acceptance remain follow-ups. See [Flutter setup](apps/flutter/README.md).
+repository. `apps/web` consumes `locho_web` **0.1.0-beta.1** from npm, with opt-in
+IndexedDB sessions and validated restoration. `apps/flutter` consumes
+`locho_flutter` **0.1.0-beta.1** from pub.dev for foreground notes and opt-in secure
+storage. Both apps support live note updates through the shared API. See
+[Flutter setup](apps/flutter/README.md) and [compatibility](docs/compatibility.md).
 
 ## Quick start
 
@@ -15,16 +15,17 @@ SQLite API is used directly; Argon2 is a native dependency with prebuilt artifac
 for common platforms and a compiler requirement if source compilation is needed.
 
 ```sh
-npm run sdk:setup
 npm ci
 npm run check
 npm run seed
 npm run dev:api
 ```
 
-For the browser workspace, run `npm run sdk:setup` **before** `npm ci` to download
-and checksum-verify its pinned SDK tarball (or set `LOCHO_SDK_ARCHIVE`). See
-[browser app setup and acceptance](apps/web/README.md).
+Dependencies install directly from public registries using the committed lockfiles.
+No SDK archive bootstrap or GitHub authentication is required. See
+[browser app setup and acceptance](apps/web/README.md). Flutter uses `flutter pub get`
+from `apps/flutter`; its SDK bundles native Rust sources and requires Rust/platform
+build toolchains.
 
 The API listens on `127.0.0.1:8080`. Check `http://127.0.0.1:8080/health` for
 `{"service":"locho-notes","apiVersion":1}`. For a compiled run:
@@ -94,18 +95,17 @@ docs/compatibility.md         # tested artifacts and delivery gates
 docs/roadmap.md               # next development slices/team handoffs
 ```
 
-Both application consumers will use pinned packaged SDKs, not generated internals
-or imports from the Locho source checkout. The Flutter app keeps its own Dart
-dependencies/builds; the web/API workspace keeps Node dependencies. Backend and
-contract changes update both consumers atomically once they exist.
+Both application consumers use exact registry SDK versions and committed lockfiles.
+The Flutter app keeps its own Dart dependencies/builds; the web/API workspace keeps
+Node dependencies. Backend and contract changes update both consumers together.
 
 ## Checks
 
 Private-container backend and static HTTPS setup are documented in
 [deployment and reproducible handoff](docs/deployment.md). Run `npm run test:deployment`
 to verify the disposable Compose stack and Caddy HTTPS/CSP with packaged browser
-clients. SDK setup supports retained archives/caches and checksum-verified HTTPS
-mirrors; no permanent mirror has been provisioned by this repository.
+clients installed from npm. Package-manager caches can accelerate repeated installs;
+fresh installation uses npm/pub.dev and verifies the lockfile integrity values.
 
 `npm run check` runs TypeScript checking, production compilation, backend tests,
 OpenAPI validation and fixture-schema checks. Tests cover sessions, expiry,

@@ -1,5 +1,16 @@
 # Compatibility baseline
 
+## Registry beta migration — 2026-10-17
+
+Both apps now pin published `0.1.0-beta.1` SDKs. Install with `npm ci` at the
+repository root and `flutter pub get` in `apps/flutter`. Lockfiles record registry
+URLs and integrity; no vendor archives or GitHub credentials are required.
+The Flutter package bundles matching native/core Rust sources from base revision
+`cb1b232` with release preparation changes, rather than fetching separate Git sources.
+See [registry acceptance](registry-acceptance.md) for the migration verification.
+
+## Earlier acceptance
+
 Flutter live events now interoperate with the production browser app using the
 existing dev.2/dev.3 pins: bidirectional CRUD/recovery and 65s heartbeat stability
 pass on Android API 37 ARM64 16 KiB emulator + Chromium. Flutter has 28 unit/widget
@@ -18,8 +29,8 @@ physical iOS/mobile-browser or real network-transition acceptance.
 | Fastify / Argon2 | 5.12.7 / 0.45.1 |
 | Locho host | v1.2.0 / `locho/3`; native adapter merged in PR #80 (`558d2e4`) |
 | Flutter tooling available | Flutter 3.44.5 / Dart 3.12.2; Android NDK 28.2 |
-| Flutter SDK artifact | locho_flutter 0.1.0-dev.2, run 38877468589, SHA-256 be944a6e24d5df8c55b6d3a142bbe11c78b16d8ceace9a9e3463736b19a22cad; native source 4f8aa20 |
-| Browser SDK artifact | @locho/web 0.1.0-dev.3, Locho PR #98 source e5faa3f320c9c142dbc155ac8e4a27e01a0c0d7f, CI test-merge 8a9e67e3fbe978a1f62ff1782ba7b183af568b7f, run 38932541782; SHA-256 83ea65e191af93a40cc1b652642e4335ef044ebb39fa31b64488ef736d5e091c |
+| Flutter SDK | locho_flutter 0.1.0-beta.1 from pub.dev; SHA-256 40d69471f0a0fe99bf19788eb260e428d30fc1124c4cfdede6bbef6172eb0234 |
+| Browser SDK | locho_web 0.1.0-beta.1 from npm; SHA-512 integrity recorded in package-lock.json |
 | Tickets | v1 locho1: format, shared Rust/WASM/FRB codec; CLI --ticket |
 | Device support claims | None yet; physical Android validation scheduled, iOS open |
 
@@ -36,7 +47,8 @@ External iOS app compilation is checked by CI, not physical runtime acceptance.
 Physical mobile/HTTPS deployment, actual BFCache entry and real network-transition
 acceptance remain open. Dev.2 adds owned browser watch subscriptions instead of
 polling and bounded Flutter unsubscribe independent of client close. Packages come
-from Locho PR #97 successful immutable CI runs; no registry publication is assumed.
+from Locho PR #97 immutable CI runs in this earlier evidence. Current registry pins
+and rerun results are recorded above and in registry-acceptance.md.
 
 Backend baseline verified on development macOS: clean `npm ci`, type checking,
 production build, all eight backend tests, OpenAPI/fixture validation, seed/reset,

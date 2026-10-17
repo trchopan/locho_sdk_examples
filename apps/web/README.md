@@ -1,16 +1,15 @@
 # Browser notes application
 
-React/TypeScript application with opt-in remembered sessions consuming the packaged `@locho/web` SDK,
+React/TypeScript application with opt-in remembered sessions consuming the published `locho_web` SDK,
 not repository source or generated WASM internals. Uses the canonical API v1 in
 `../../contracts`; no separate backend implementation.
 
 ## Fresh setup (repository root)
 
-Use Node 24.18.0/npm 11.16.0. Authenticate GitHub CLI for artifact download, or
-provide `LOCHO_SDK_ARCHIVE` pointing to the exact SDK tarball:
+Use Node 24.18.0/npm 11.16.0. Dependencies come directly from the public npm
+registry with committed lockfile integrity:
 
 ```sh
-npm run sdk:setup
 npm ci
 npm run check
 npm run seed
@@ -26,13 +25,10 @@ from the root README. Ticket input and password fields clear after submission.
 The host must support ticket v1 (Locho PR #91 or later). The app validates health
 identity/version before login. A peer connection alone is not API readiness.
 
-SDK pin: `0.1.0-dev.3`, source `e5faa3f320c9c142dbc155ac8e4a27e01a0c0d7f` (Locho #98), CI run
-`38932541782` (test-merge build `8a9e67e3fbe978a1f62ff1782ba7b183af568b7f`), artifact `locho-web-npm-package`, tarball SHA-256
-`83ea65e191af93a40cc1b652642e4335ef044ebb39fa31b64488ef736d5e091c`.
-The setup script verifies this hash; npm lock additionally pins integrity. Artifacts
-can expire: keep an immutable local copy and supply `LOCHO_SDK_ARCHIVE` when needed.
-No npm registry publication is assumed. Artifact upgrades require reviewed pin,
-checksum and compatibility changes together.
+SDK pin: [`locho_web` 0.1.0-beta.1](https://www.npmjs.com/package/locho_web/v/0.1.0-beta.1).
+`package-lock.json` pins its registry URL and SHA-512 integrity. No `vendor/`,
+GitHub credentials, Rust compiler or SDK build scripts are needed for the browser
+application. Upgrade the exact dependency, lockfile and compatibility record together.
 
 ## Application behavior
 
@@ -70,7 +66,7 @@ checksum and compatibility changes together.
   prevents automatic resurrection. Health/me validation precedes restored content.
   Async cleanup during page destruction is best effort. Tests dispatch persisted
   page events; actual BFCache entry is browser/environment-dependent and unproven.
-- The dev.2 SDK provides Rust-watch-backed subscriptions. One owned observer
+- The SDK provides Rust-watch-backed subscriptions. One owned observer
   hides notes on reconnecting and recreates/revalidates after recovery; no interval
   polling or mutation replay. Teardown unsubscribes before client close; generation
    guards discard late callbacks. Real network-transition evidence remains future
@@ -78,7 +74,7 @@ checksum and compatibility changes together.
 
 ## Live note updates
 
-The dev.3 streaming API carries bearer-authenticated `/api/events`. One owned event
+The SDK streaming API carries bearer-authenticated `/api/events`. One owned event
 watch per authenticated foreground session subscribes before the canonical list
 refresh. Same-user changes in other tabs/devices invalidate the list; notes are
 reloaded from the API. Editor drafts and unknown-write messages survive background
@@ -128,5 +124,6 @@ relay, physical mobile browser or HTTPS deployment acceptance.
 Deploy `apps/web/dist` as static assets over HTTPS. Serve `.wasm` with
 `application/wasm`; CSP must permit modules/WebAssembly compilation and HTTPS/WSS
 N0 discovery/relays. Keep third-party scripts and analytics off credential pages.
-The API remains private behind Locho, not public ingress. Flutter event consumers,
-WebSockets and real mobile/BFCache/network acceptance remain follow-ups.
+The API remains private behind Locho, not public ingress. Browser↔Flutter live-event
+acceptance is documented in `docs/events.md`; WebSockets and real
+mobile/BFCache/network acceptance remain follow-ups.

@@ -4,7 +4,7 @@
 
 Authenticated foreground sessions subscribe to `/api/events` through ordinary
 streamed Dart HTTP over the packaged SDK's loopback attachment. The Flutter SDK
-remains checksum-pinned dev.2; this feature needs no new native transport API.
+is pinned to pub.dev `0.1.0-beta.1`; events use ordinary Dart streamed HTTP.
 
 - A dedicated event HTTP client avoids cancelling concurrent JSON requests.
 - Subscribe before initial/recovery canonical list refresh. One list read runs at
@@ -28,8 +28,8 @@ production configures it explicitly. Null supports existing JSON-only fake trans
 
 ### Cross-platform reproduction
 
-From repository root, after `npm run sdk:setup`, `npm ci`, `npm run build`, Flutter
-SDK setup and booting the disposable Android emulator:
+From repository root, after `npm ci`, `npm run build`, `flutter pub get` inside
+`apps/flutter` and booting the disposable Android emulator:
 
 ```sh
 LOCHO_BINARY=/absolute/path/to/locho node scripts/flutter-fixture.mjs --events
@@ -53,9 +53,9 @@ acceptance and autonomous release acceptance also pass with live events enabled.
 These runtime results are emulator/Chromium evidence; CI checks Android/iOS builds,
 not physical iOS/Android or a complete mobile-browser matrix.
 
-## SDK dev.2 upgrade
+## Status subscription ownership
 
-The pinned dev.2 archive includes bounded status unsubscribe. App teardown now
+The pinned SDK includes bounded status unsubscribe. App teardown
 awaits subscription cancellation before client close, with the same cleanup budgets;
 it no longer depends on owner close to unblock the status generator. Deterministic
 tests and Android debug/release acceptance pass with this order.
@@ -83,28 +83,18 @@ Android debug/release notes acceptance was rerun successfully on the ARM64 emula
 after this refactor. These checks add reliability evidence, not physical-device,
 network-transition, backup/uninstall or complete tap-driven UI acceptance.
 
-Standalone Android/iOS foreground notes app using the delivered `locho_flutter`
-source archive and the same API v1 as `apps/web`. No generated FRB imports or sibling
+Standalone Android/iOS foreground notes app using published `locho_flutter`
+and the same API v1 as `apps/web`. No generated FRB imports or sibling
 SDK Rust sources are required. This is a demonstration, not a background service.
 
 ## Setup
 
-From the repository root, with authenticated GitHub CLI (or a retained archive):
+SDK pin: [`locho_flutter` 0.1.0-beta.1](https://pub.dev/packages/locho_flutter/versions/0.1.0-beta.1).
+The committed `pubspec.lock` pins the hosted package and archive checksum. The SDK
+bundles matching Locho Rust core/native sources and generated FRB bindings. Install
+directly from pub.dev; no vendor bootstrap, GitHub login or SDK checkout is required.
 
-```sh
-python3 scripts/setup-flutter-sdk.py
-# Alternative: LOCHO_FLUTTER_ARCHIVE=/path/to/archive.tar.gz python3 scripts/setup-flutter-sdk.py
-```
-
-The script verifies the pinned archive SHA-256 before extracting to ignored `vendor/`:
-`be944a6e24d5df8c55b6d3a142bbe11c78b16d8ceace9a9e3463736b19a22cad`.
-Artifact: Locho run `38877468589`, `locho-flutter-source-package`, version
-`0.1.0-dev.2`, source `a509ccafc1bb8137aa6ac165f046d32c91f3de22`.
-Its native/core Rust dependency is pinned to `4f8aa20c3bcbabb667ef2354510bdb101d690fa6`.
-GitHub artifact retention can expire; keep a copy with this checksum. Do not replace
-it silently with a new artifact bearing the same package version.
-
-Then, from `apps/flutter`:
+From `apps/flutter`:
 
 ```sh
 flutter pub get
@@ -114,8 +104,8 @@ flutter run -d emulator-5554
 ```
 
 Use Flutter 3.44.5/Dart 3.12.2, Rust 1.96+, JDK 21 recommended, Android SDK 36+ and
-NDK 28.2.13676358. Minimum Android API 23. Cargokit fetches pinned Rust sources and
-builds native libraries with `--locked`. Cold builds need network access. iOS needs
+NDK 28.2.13676358. Minimum Android API 23. Cargokit builds the bundled Rust sources
+with `--locked`; cold builds need registry/toolchain network access. iOS needs
 full Xcode/CocoaPods; run `flutter config --no-enable-swift-package-manager` first.
 The iOS runner includes a local-network usage description and keychain entitlements;
 device signing/provisioning remains developer configuration.
