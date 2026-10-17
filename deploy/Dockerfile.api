@@ -3,7 +3,7 @@ WORKDIR /app
 COPY package.json package-lock.json tsconfig.json ./
 COPY apps/api apps/api
 COPY apps/web/package.json apps/web/package.json
-COPY vendor/locho-web-0.1.0-dev.2.tgz vendor/locho-web-0.1.0-dev.2.tgz
+COPY vendor/locho-web-0.1.0-dev.3.tgz vendor/locho-web-0.1.0-dev.3.tgz
 COPY contracts contracts
 RUN npm ci && npm run build --workspace @locho-examples/api && npm prune --omit=dev
 

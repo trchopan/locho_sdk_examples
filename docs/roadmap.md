@@ -1,82 +1,49 @@
-# Next development and handoffs
+# Development roadmap and handoffs
 
-## Streaming slice 1 — authenticated backend events
+## Current milestone: live note updates
 
-API v1 adds /api/events (OpenAPI 1.1.0): per-user committed note invalidations,
-bounded admission/backpressure, heartbeats and expiry/revocation cleanup. Live HTTP
-tests pass; see events.md. Browser streaming SDK is next, then event consumers in
-both apps. Current buffered browser fetch is unsuitable for infinite SSE bodies.
+- Backend authenticated `/api/events` and OpenAPI 1.1.0 merged in examples #8:
+  scoped committed invalidations, bounded subscribers/backpressure, heartbeat,
+  logout/expiry checks and no replay.
+- Browser streaming transport merged in Locho #98: bounded pull-driven response
+  bodies and setup/idle deadlines. This app pins the verified dev.3 tarball.
+- Browser app now parses bounded SSE, coalesces canonical refresh, recovers missed
+  changes after health/me validation and subscription, preserves drafts and unknown
+  write messages, and cancels event readers/retry timers with session ownership.
 
-## Deployment handoff
+## Next: Flutter event consumers
 
-Private Compose API/Locho topology, separate Caddy static HTTPS hosting, verified
-SDK local-cache/mirror inputs and disposable deployment acceptance are implemented.
-Local Docker ARM64 passes browser login/CRUD through private containers and internal
-CA HTTPS/CSP. Linux CI verifies the same fresh-checkout flow. See deployment.md for
-public ACME/trust, durable artifact hosting and physical-device gates still open.
+Use streamed Dart HTTP through the existing loopback SDK attachment, with a dedicated
+event HTTP client and setup/idle deadlines. Match browser contract vectors and
+refresh/retry/auth policies. Verify browser-to-Flutter and Flutter-to-browser updates,
+foreground/background cleanup, logout/expiry, host restart and interrupted writes.
+Flutter can retain its dev.2 native SDK pin; no new native transport API is required.
 
-## JSON failure acceptance
+## Then: streaming acceptance and WebSockets
 
-Shared test fixture and packaged apps now verify host restart/upstream outage and
-unknown mutation outcomes without replay. Browser production matrix passes 27
-cases locally. Flutter adds tap-driven CRUD, real controller failure injection and
-release process-restart secure restore on the ARM64 16 KiB emulator. See
-json-acceptance.md for exact coverage. Next: deployment/reproducible handoff and
-remaining physical/mobile/network acceptance before streaming extensions.
+Before calling SSE complete, verify both packaged apps across multiple heartbeat
+intervals, old buffered deadlines, reconnects and repeated cancellation. Physical
+mobile runtime/network evidence is separate from emulator/desktop CI results.
+Next protocol slice is authenticated `/api/ws` with bounded messages, session
+rechecks and explicit close/recovery behavior. Never replay application mutations.
 
-## SDK dev.2 integration
+## Completed foundations
 
-Both notes apps now pin dev.2 artifacts from Locho PR #97. Browser observation uses
-an owned Rust-watch subscription instead of setInterval; Flutter unsubscribes before
-owner close without relying on the previous generator workaround. Local browser UI,
-controller tests and Android debug/release runtime acceptance pass. Next is broader
-JSON failure acceptance (host restart, interrupted writes and process/UI lifecycle),
-then deployment handoff and physical device/network evidence.
+Examples #1–#7 established the shared API, browser and Flutter foreground CRUD apps,
+opt-in scoped persistence, validated recovery, injectable Flutter lifecycle tests,
+owned SDK status subscriptions, unknown-write outcome acceptance, private Compose
+deployment and static HTTPS/CSP hosting. See compatibility.md, json-acceptance.md
+and deployment.md for exact evidence and limitations.
 
-## Current slice — Flutter ownership hardening
+## Open acceptance and deployment work
 
-Flutter notes app now consumes the checksum-pinned source archive with foreground
-pairing/login/CRUD and opt-in secure storage. Android debug/release controller/runtime
-journey passes on the ARM64 16 KiB emulator. Hosted iOS compilation also passes;
-physical mobile,
-network/storage acceptance, deployment and full tap-driven app tests remain gates.
+- Physical Android/iOS and real mobile-browser runtime matrices.
+- Actual BFCache, storage/network transitions and live relay migration.
+- Controlled authenticated relays, public DNS/ACME and durable artifact hosting.
 
-apps/web uses a checksum-pinned packaged SDK and API v1 for pair/health/login/CRUD.
-Opt-in IndexedDB storage, validated restore, remember-off deletion, forget races,
-revoked tokens, storage failure and page-event ownership now pass 18 production UI
-tests and 11 controller tests locally. SDK status subscriptions and actual mobile/
-BFCache/network/deployment evidence remain open. Flutter full app is implemented;
-ownership hardening adds injectable dependencies and deterministic race/cleanup
-tests before broader JSON failure acceptance and SDK status-subscription work.
-The GitHub remote and examples CI now exist. Historical slice table below describes
-the dependency sequence, not current completion of all acceptance gates.
-
-SDK team owns `locho`: Rust core/native adapter, Flutter/browser packages, tiny
-smoke apps, package/runtime checks. Samples team owns this repository: canonical
-OpenAPI, one backend, full apps, storage/lifecycle and deployment/application tests.
-
-| Slice | Repository | Exit |
-| --- | --- | --- |
-| 1 — current | examples | Tested auth/notes API, schemas/fixtures, seed/reset and native Locho setup |
-| 2 | locho | Android-first FRB package: real Android attach/GET/close, iOS compilation CI |
-| 3 | locho | Browser WASM/discovery/relay proof against this same API |
-| 4 | locho | Addressing decisions frozen; CLI tickets and shared Rust/Dart/TS vectors |
-| 5a/5b | locho | Distributable Flutter/browser packages and external-consumer builds |
-| 6a | examples/apps/flutter | Foreground pair/health/login/notes/remember/restore, device evidence |
-| 6b | examples/apps/web | HTTPS pair/health/login/notes/remember/restore, browser matrix |
-| 7 | both | Authenticated incremental SSE, then bidirectional WebSockets |
-
-Scaffold the full apps only when their dependency slice begins. Node and Flutter
-retain independent builds/locks. Backend work can overlap SDK feasibility; mocks
-support UI iteration but are not acceptance evidence. Native container deployment
-and CI for this repository follow initial local review/GitHub setup.
-
-Package handoffs include artifact/version/commit, exact install/build commands,
-public types, supported target matrix, safe error examples and known limitations.
-This repository returns versioned backend fixtures and sanitized integration
-reproductions. Update `docs/compatibility.md` deliberately on upgrades.
-
-Later SSE `/api/events`: per-user note-change invalidation, 30-second heartbeat,
-bounded queues and session rechecks. No durable replay; refresh notes after recovery.
-Later WebSocket `/api/ws`: bearer upgrade auth, ping/pong demo, bounded messages,
-session rechecks and application expiry close code 4001. These do not block JSON.
+SDK repository `locho` owns shared Rust/session/native code, SDK APIs, packages and
+external consuming-app checks. This repository owns canonical contracts/backend,
+full apps, persistence/lifecycle and deployment/application acceptance. Package
+handoffs must include immutable run/source/version/checksum and reviewed compatibility
+updates. Mocks aid deterministic race testing; packaged transport tests establish
+runtime evidence. PRs remain reviewable slices and are merged by the user.

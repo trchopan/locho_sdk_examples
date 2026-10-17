@@ -24,10 +24,10 @@ rather than silently selecting another package. Flutter uses the equivalent setu
 script before `flutter pub get`.
 
 ```sh
-LOCHO_SDK_ARCHIVE=/retained/locho-web-0.1.0-dev.2.tgz npm run sdk:setup
+LOCHO_SDK_ARCHIVE=/retained/locho-web-0.1.0-dev.3.tgz npm run sdk:setup
 LOCHO_FLUTTER_ARCHIVE=/retained/locho_flutter-0.1.0-dev.2.tar.gz python3 scripts/setup-flutter-sdk.py
 # Or an operator-maintained immutable HTTPS location serving those exact bytes:
-LOCHO_SDK_URL=https://artifacts.example.org/sdk/locho-web-0.1.0-dev.2.tgz npm run sdk:setup
+LOCHO_SDK_URL=https://artifacts.example.org/sdk/locho-web-0.1.0-dev.3.tgz npm run sdk:setup
 LOCHO_FLUTTER_URL=https://artifacts.example.org/sdk/locho_flutter-0.1.0-dev.2.tar.gz python3 scripts/setup-flutter-sdk.py
 ```
 

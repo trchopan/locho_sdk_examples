@@ -47,6 +47,7 @@ function App() {
       <button disabled={state.busy}>Login</button>
     </form>}
     {state.phase === 'notes' && <section><h2>Notes for {state.user?.email}</h2>
+      <p data-testid="live-status">Live updates: {state.live}</p>
       <button disabled={state.busy} onClick={() => void session.refresh()}>Refresh notes</button>
       <form onSubmit={(e) => { e.preventDefault(); void session.save(title, body, editing); }}>
         <h3>{editing ? 'Edit note' : 'New note'}</h3>

@@ -9,12 +9,12 @@ physical iOS/mobile-browser or real network-transition acceptance.
 | --- | --- |
 | Node / npm | 24.18.0 / 11.16.0 on development macOS |
 | TypeScript | 5.9.3, exact lockfile pins |
-| API | v1; OpenAPI document 1.0.0; database schema 1 |
+| API | v1; OpenAPI document 1.1.0; database schema 1 |
 | Fastify / Argon2 | 5.12.7 / 0.45.1 |
 | Locho host | v1.2.0 / `locho/3`; native adapter merged in PR #80 (`558d2e4`) |
 | Flutter tooling available | Flutter 3.44.5 / Dart 3.12.2; Android NDK 28.2 |
 | Flutter SDK artifact | locho_flutter 0.1.0-dev.2, run 38877468589, SHA-256 be944a6e24d5df8c55b6d3a142bbe11c78b16d8ceace9a9e3463736b19a22cad; native source 4f8aa20 |
-| Browser SDK artifact | @locho/web 0.1.0-dev.2, source a509ccafc1bb8137aa6ac165f046d32c91f3de22, run 38877468606; SHA-256 pinned in setup script and web README |
+| Browser SDK artifact | @locho/web 0.1.0-dev.3, Locho PR #98 source e5faa3f320c9c142dbc155ac8e4a27e01a0c0d7f, CI test-merge 8a9e67e3fbe978a1f62ff1782ba7b183af568b7f, run 38932541782; SHA-256 83ea65e191af93a40cc1b652642e4335ef044ebb39fa31b64488ef736d5e091c |
 | Tickets | v1 locho1: format, shared Rust/WASM/FRB codec; CLI --ticket |
 | Device support claims | None yet; physical Android validation scheduled, iOS open |
 
