@@ -4,7 +4,7 @@
 
 Use Node 24.18.0, npm 11.16.0 and Docker Compose v2+ with support for health-based
 dependencies and `up --wait`. Images are version-tagged; Locho source is additionally
-pinned to full Git revision `4f8aa20c3bcbabb667ef2354510bdb101d690fa6`. Image tags and
+pinned to full Git revision `3786da3127338b2530e0cd8cea8ef23bc6d55dfd` (`1.3.0-beta.1`). Image tags and
 OS package repositories are not immutable digests; these Docker builds are repeatable
 instructions, not hermetic/reproducible-bit guarantees. Record built image IDs for
 your deployment and review base-image updates deliberately.

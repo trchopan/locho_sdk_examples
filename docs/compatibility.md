@@ -9,6 +9,16 @@ The Flutter package bundles matching native/core Rust sources from base revision
 `cb1b232` with release preparation changes, rather than fetching separate Git sources.
 See [registry acceptance](registry-acceptance.md) for the migration verification.
 
+## CLI beta handoff — 2026-10-17
+
+The examples' CI and private Compose host now pin Locho CLI candidate
+`1.3.0-beta.1` at full merge commit
+`3786da3127338b2530e0cd8cea8ef23bc6d55dfd`. The SDKs remain independently pinned
+to browser `locho_web` `0.1.0-beta.1` and Flutter `locho_flutter` `0.1.0-beta.1`.
+Candidate-specific API, browser, Compose/HTTPS and Android acceptance is run from
+this branch before the CLI tag is published. The public SDK registry checksums are
+unchanged.
+
 ## Earlier acceptance
 
 Flutter live events now interoperate with the production browser app using the
@@ -27,7 +37,7 @@ physical iOS/mobile-browser or real network-transition acceptance.
 | TypeScript | 5.9.3, exact lockfile pins |
 | API | v1; OpenAPI document 1.1.0; database schema 1 |
 | Fastify / Argon2 | 5.12.7 / 0.45.1 |
-| Locho host | v1.2.0 / `locho/3`; native adapter merged in PR #80 (`558d2e4`) |
+| Locho host | v1.3.0-beta.1 / `locho/3`; merge `3786da3`; candidate acceptance in this branch |
 | Flutter tooling available | Flutter 3.44.5 / Dart 3.12.2; Android NDK 28.2 |
 | Flutter SDK | locho_flutter 0.1.0-beta.1 from pub.dev; SHA-256 40d69471f0a0fe99bf19788eb260e428d30fc1124c4cfdede6bbef6172eb0234 |
 | Browser SDK | locho_web 0.1.0-beta.1 from npm; SHA-512 integrity recorded in package-lock.json |
@@ -36,7 +46,7 @@ physical iOS/mobile-browser or real network-transition acceptance.
 
 Browser app now passes the memory-only production UI journey on local Chromium,
 Firefox and WebKit through public N0 using the pinned SDK tarball. Host CI builds
-the same 4f8aa20 revision. Flutter SDK source archives/external Android/iOS builds
+the candidate `3786da3` revision. Flutter SDK source archives/external Android/iOS builds
 exist in Locho PR #95; the standalone Flutter notes application is implemented in
 examples PR #3 with hosted Android/iOS builds and Android emulator runtime evidence.
 Opt-in IndexedDB sessions and page-event restoration now pass the 18-case local

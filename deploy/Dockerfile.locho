@@ -1,5 +1,5 @@
 FROM rust:1.96.0-bookworm AS build
-ARG LOCHO_REVISION=4f8aa20c3bcbabb667ef2354510bdb101d690fa6
+ARG LOCHO_REVISION=3786da3127338b2530e0cd8cea8ef23bc6d55dfd
 WORKDIR /source
 RUN git init && git remote add origin https://github.com/trchopan/locho.git && \
     git fetch --depth 1 origin "$LOCHO_REVISION" && git checkout --detach FETCH_HEAD && \
