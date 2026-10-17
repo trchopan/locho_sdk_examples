@@ -21,10 +21,10 @@ async function stop(server) {
 }
 
 /** Test-only response fault boundary: forwards to the real API and never stores request data. */
-export async function acceptanceFixture(binary) {
+export async function acceptanceFixture(binary, { eventsTickMs = 100 } = {}) {
   if (!binary) throw new Error('LOCHO_BINARY must point to the pinned built CLI');
   const directory = await mkdtemp(join(tmpdir(), 'notes-acceptance-'));
-  const { app, db } = await createApp({ loginAttempts: 1000, eventsTickMs: 100 });
+  const { app, db } = await createApp({ loginAttempts: 1000, eventsTickMs });
   let host, apiPort, proxyPort, interrupt;
   let mutations = 0, dropped = 0;
   const eventResponses = new Set();

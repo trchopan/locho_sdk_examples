@@ -1,5 +1,10 @@
 # Compatibility baseline
 
+Flutter live events now interoperate with the production browser app using the
+existing dev.2/dev.3 pins: bidirectional CRUD/recovery and 65s heartbeat stability
+pass on Android API 37 ARM64 16 KiB emulator + Chromium. Flutter has 28 unit/widget
+tests; see events.md and apps/flutter/README.md for runtime reproduction/limits.
+
 JSON failure acceptance now adds a 27-case local browser matrix and Flutter
 tap-driven CRUD, host/upstream faults and release process-restart restore on the
 Android ARM64 16 KiB emulator. See json-acceptance.md; these results do not establish

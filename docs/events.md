@@ -59,8 +59,10 @@ Browser consumes packaged dev.3 `fetchStream()` and now subscribes automatically
 for an authenticated foreground session. See apps/web/README.md for bounded parsing,
 refresh coalescing, backoff, missed-change recovery and ownership. Buffered `fetch()`
 remains unsuitable for infinite SSE; native EventSource cannot address Locho host IDs
-or supply this bearer-header flow. Flutter integration is next: ordinary streamed
-Dart HTTP through loopback with setup/idle, rather than full-body lifetime, timeouts.
+or supply this bearer-header flow. Flutter now consumes ordinary streamed Dart HTTP
+through loopback with setup/idle, rather than full-body lifetime, timeouts. Its event
+watch, bounded parser, coalesced refresh, backoff and auth cleanup match browser policy.
+See apps/flutter/README.md for exact reproduction and dependency injection.
 
 Browser verification adds eight deterministic parser/ownership/recovery tests
 (20 browser unit tests total) and nine production UI cases across three engines:
@@ -70,6 +72,15 @@ JSON/browser failure matrix remains a gate. Local full run passed 35/36 active
 cases; one Firefox remembered-restore N0 timeout passed a focused rerun. Private
 Compose and internal-CA HTTPS/CSP/WASM acceptance passed all six deployment cases.
 These are desktop browser results, not physical/mobile or actual BFCache evidence.
+
+Cross-platform runtime acceptance (`node scripts/flutter-fixture.mjs --events`, with
+LOCHO_BINARY set) passes on the Android API 37 ARM64 16 KiB emulator and production
+Chromium app using packaged Flutter dev.2/browser dev.3 SDKs. It covers bidirectional
+CRUD, isolation, 65s stable connections across two real 30s heartbeats, missed-change
+recovery, draft preservation, suspend/resume, logout and secure-token expiry cleanup.
+Flutter adds eight event tests (28 total); existing host restart/upstream outage,
+committed-but-lost mutation and autonomous release acceptance pass with events enabled.
+This establishes emulator/desktop interoperability, not physical/mobile completeness.
 
 Physical/mobile, authenticated custom relay, public HTTPS and broad network gates
 listed in deployment/json-acceptance docs remain open; backend SSE does not close

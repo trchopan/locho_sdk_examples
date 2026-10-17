@@ -1,5 +1,58 @@
 # Flutter notes application
 
+## Live note events
+
+Authenticated foreground sessions subscribe to `/api/events` through ordinary
+streamed Dart HTTP over the packaged SDK's loopback attachment. The Flutter SDK
+remains checksum-pinned dev.2; this feature needs no new native transport API.
+
+- A dedicated event HTTP client avoids cancelling concurrent JSON requests.
+- Subscribe before initial/recovery canonical list refresh. One list read runs at
+  a time; bursts mark one dirty follow-up. Event refresh defers during user actions.
+- Incremental strict UTF-8 and CR/LF/CRLF SSE parsing handles comments/multiline
+  data, ignores unknown event names/id/retry, and validates NoteChange fields.
+  The parser bounds each line/event to 4096 bytes, including repeated fields.
+- Setup deadline 15s; per-read idle deadline 75s, with no whole-stream deadline.
+  EOF/reset/timeout/malformed data enters capped jittered backoff (1s initial,
+  30s cap; stable 30s resets it). 429 respects integer Retry-After up to 300s.
+- Recovery validates health/me, subscribes, then refreshes missed changes; no
+  Last-Event-ID or mutation replay. Live status is separate from transport/auth.
+- Drafts and unknown-write messages survive event refresh. Session expiry clears
+  token/saved auth and rejects stale in-flight authenticated results.
+- Background/disconnect/logout/forget/scope switch/dispose abort the event request,
+  close its HTTP client and cancel retry timers. Resume requires surviving intent.
+  Final close gives event cleanup the configured 15s cleanup budget.
+
+`SessionDependencies.eventClient` injects dedicated streaming clients for tests;
+production configures it explicitly. Null supports existing JSON-only fake transports.
+
+### Cross-platform reproduction
+
+From repository root, after `npm run sdk:setup`, `npm ci`, `npm run build`, Flutter
+SDK setup and booting the disposable Android emulator:
+
+```sh
+LOCHO_BINARY=/absolute/path/to/locho node scripts/flutter-fixture.mjs --events
+```
+
+This starts the production packaged browser app in Chromium and runs Flutter's
+integration test on `LOCHO_DEVICE` (default emulator-5554) against the same private
+API/Locho host. Temporary credentials remain in mode-0600 defines and browser memory;
+no traces/screenshots/video are captured. The test control bridge drives browser UI
+and fixture faults only; app notes/auth traffic still uses the actual SDK transports.
+Fixture closes browser, HTTP controls, host and adb reverse on completion.
+
+Local Android 17/API 37 ARM64 **16384-byte-page emulator** verification passes:
+browser↔Flutter create/update/delete, user isolation, 65s stable streams spanning
+two production 30s heartbeats and the old buffered deadline, missed changes during
+event outage, draft retention, suspension/resume, session-specific logout and idle
+expiry removing secure-storage token. Eight new deterministic tests cover framing,
+limits, late admission, idle deadline, coalescing, retry/429 and stale auth races
+(28 Flutter unit/widget tests total). Existing real host/upstream/interrupted-write
+acceptance and autonomous release acceptance also pass with live events enabled.
+These runtime results are emulator/Chromium evidence; CI checks Android/iOS builds,
+not physical iOS/Android or a complete mobile-browser matrix.
+
 ## SDK dev.2 upgrade
 
 The pinned dev.2 archive includes bounded status unsubscribe. App teardown now
@@ -130,5 +183,5 @@ tests do not claim a particular selected transport path.
 Local Android ARM64 16 KiB emulator debug acceptance and ARM64/x86_64 debug/release
 builds pass; autonomous release acceptance passes. iOS build CI is separate from
 physical iOS runtime evidence. Physical-device notes acceptance, real network
-transitions, secure storage backup/uninstall matrix, QR, SSE and WebSockets remain
+transitions, secure storage backup/uninstall matrix, QR and WebSockets remain
 open. Unsigned iOS and development-signed APKs are not store releases.
