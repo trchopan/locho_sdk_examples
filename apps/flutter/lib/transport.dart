@@ -22,12 +22,22 @@ class SessionDependencies {
   final Future<Pairing> Function(String) parse;
   final Future<TunnelClient> Function() create;
   final http.Client Function() httpClient;
+
+  /// Dedicated streaming clients; null allows JSON-only injected test transports.
+  final http.Client Function()? eventClient;
+  final Duration eventIdleTimeout;
+  final Duration eventRetryBase;
+  final double Function()? eventRandom;
   final Duration cleanupTimeout;
   final Duration requestTimeout;
   const SessionDependencies({
     required this.parse,
     required this.create,
     required this.httpClient,
+    this.eventClient,
+    this.eventIdleTimeout = const Duration(seconds: 75),
+    this.eventRetryBase = const Duration(seconds: 1),
+    this.eventRandom,
     this.cleanupTimeout = const Duration(seconds: 15),
     this.requestTimeout = const Duration(seconds: 15),
   });
@@ -35,6 +45,7 @@ class SessionDependencies {
     parse: (text) async => _Ticket(await LochoTicket.parse(text)),
     create: () async => _Client(await LochoClient.create()),
     httpClient: http.Client.new,
+    eventClient: http.Client.new,
   );
 }
 

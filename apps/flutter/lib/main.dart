@@ -173,6 +173,7 @@ class _NotesScreenState extends State<NotesScreen> with WidgetsBindingObserver {
           ],
           if (s.phase == 'notes') ...[
             Text('Notes for ${s.user?['email']}'),
+            Text('Live updates: ${s.live}', key: const ValueKey('live-status')),
             TextButton(
               onPressed: s.busy ? null : () => unawaited(s.refresh()),
               child: const Text('Refresh notes'),

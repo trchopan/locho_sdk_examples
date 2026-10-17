@@ -5,6 +5,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:http/http.dart' as http;
 import 'package:locho_flutter/locho_flutter.dart';
 import 'transport.dart';
+import 'events.dart';
 
 abstract interface class Credentials {
   Future<String?> read();
@@ -51,6 +52,11 @@ class NotesSession extends ChangeNotifier {
   int editorRevision = 0;
   Future<void>? _shutdown;
   final Set<http.Client> _revocations = {};
+  String live = 'off';
+  NoteEventWatch? _events;
+  Future<void> _eventsCleanup = Future.value();
+  Future<void>? _loading;
+  bool _dirty = false, _refreshQueued = false;
   void changed() {
     if (!_disposed) notifyListeners();
   }
@@ -82,8 +88,106 @@ class NotesSession extends ChangeNotifier {
   }
 
   String? get localBase => _attachment?.httpBaseUri.toString();
+  void _stopEvents() {
+    final events = _events;
+    _events = null;
+    _eventsCleanup = Future.wait([
+      _eventsCleanup,
+      if (events != null) events.stop(),
+    ]).then((_) {}).catchError((Object _) {});
+    live = 'off';
+  }
+
+  Future<void> _clearAuth(int g) async {
+    current(g);
+    _stopEvents();
+    _token = null;
+    _loading = null;
+    _dirty = false;
+    editorRevision++;
+    user = null;
+    notes = [];
+    phase = 'login';
+    changed();
+    await persist();
+    current(g);
+  }
+
+  Future<void> _startEvents(int g) async {
+    await _eventsCleanup;
+    current(g);
+    final factory = dependencies.eventClient, attachment = _attachment;
+    if (factory == null ||
+        _token == null ||
+        attachment == null ||
+        _events != null) {
+      return;
+    }
+    late final NoteEventWatch watch;
+    bool owned() => g == _generation && !_disposed && _events == watch;
+    watch = NoteEventWatch(
+      createClient: factory,
+      uri: attachment.httpBaseUri.resolve('/api/events'),
+      token: _token!,
+      setupTimeout: dependencies.requestTimeout,
+      idleTimeout: dependencies.eventIdleTimeout,
+      retryBase: dependencies.eventRetryBase,
+      random: dependencies.eventRandom,
+      state: (value) {
+        if (owned()) {
+          live = value;
+          changed();
+        }
+      },
+      refresh: () {
+        if (owned()) _queueRefresh(g);
+      },
+      unauthorized: () async {
+        if (owned()) await _clearAuth(g);
+      },
+      validate: () async {
+        current(g);
+        final health = await call('/health', g, auth: false);
+        if (health['service'] != 'locho-notes' || health['apiVersion'] != 1) {
+          throw const FormatException();
+        }
+        final me = await call('/api/me', g);
+        if (_token == null || me['user']?['id'] != user?['id']) {
+          throw const FormatException();
+        }
+      },
+    );
+    _events = watch;
+    await watch.start();
+    current(g);
+  }
+
+  void _queueRefresh(int g) {
+    _dirty = true;
+    if (_refreshQueued) return;
+    _refreshQueued = true;
+    scheduleMicrotask(() {
+      _refreshQueued = false;
+      if (g != _generation || _disposed || _token == null || busy || !_dirty) {
+        return;
+      }
+      unawaited(
+        load(g).catchError((Object _) {
+          if (g == _generation && _token != null) {
+            live = 'reconnecting';
+            changed();
+            _events?.reconnect();
+          }
+        }),
+      );
+    });
+  }
+
   int invalidate({bool closeClient = true}) {
     _generation++;
+    _stopEvents();
+    _dirty = false;
+    _loading = null;
     final client = _client, watch = _watch;
     _client = null;
     _watch = null;
@@ -252,7 +356,8 @@ class NotesSession extends ChangeNotifier {
         try {
           final me = await call('/api/me', g);
           user = Map<String, dynamic>.from(me['user']);
-          await load(g);
+          await _startEvents(g);
+          if (_token != null) await load(g);
         } on ApiFailure catch (error) {
           if (error.status != 401) rethrow;
         }
@@ -260,6 +365,7 @@ class NotesSession extends ChangeNotifier {
       current(g);
       phase = _token == null ? 'login' : 'notes';
       busy = false;
+      if (_dirty) _queueRefresh(g);
       _watch = attachment.states.listen(
         (status) {
           if (g != _generation || _disposed || _suspended) return;
@@ -294,6 +400,7 @@ class NotesSession extends ChangeNotifier {
     } catch (_) {
       await _cleanup(client, null);
       if (g == _generation) {
+        _stopEvents();
         _client = null;
         _http?.close();
         _http = null;
@@ -314,6 +421,12 @@ class NotesSession extends ChangeNotifier {
   }) async {
     current(g);
     final attachment = _attachment, api = _http;
+    final token = auth ? _token : null;
+    void authenticatedCurrent() {
+      current(g);
+      if (auth && token != _token) throw Obsolete();
+    }
+
     if (attachment == null || api == null) throw StateError('disconnected');
     final abort = Completer<void>();
     final timer = Timer(dependencies.requestTimeout, () => abort.complete());
@@ -332,7 +445,7 @@ class NotesSession extends ChangeNotifier {
         request.body = jsonEncode(body);
       }
       final response = await api.send(request);
-      current(g);
+      authenticatedCurrent();
       final bytes = <int>[];
       await for (final chunk in response.stream) {
         if (bytes.length + chunk.length > 8 * 1024 * 1024) {
@@ -341,16 +454,10 @@ class NotesSession extends ChangeNotifier {
         }
         bytes.addAll(chunk);
       }
-      current(g);
+      authenticatedCurrent();
       if (response.statusCode < 200 || response.statusCode >= 300) {
         if (auth && response.statusCode == 401) {
-          _token = null;
-          editorRevision++;
-          user = null;
-          notes = [];
-          phase = 'login';
-          await persist();
-          current(g);
+          await _clearAuth(g);
         }
         throw ApiFailure(response.statusCode);
       }
@@ -384,6 +491,7 @@ class NotesSession extends ChangeNotifier {
     } finally {
       if (g == _generation) {
         busy = false;
+        if (_dirty) _queueRefresh(g);
         changed();
       }
     }
@@ -405,10 +513,33 @@ class NotesSession extends ChangeNotifier {
     user = Map<String, dynamic>.from(data['user']);
     await persist();
     current(g);
-    await load(g);
-    phase = 'notes';
+    await _startEvents(g);
+    if (_token != null) {
+      await load(g);
+      phase = 'notes';
+    }
   });
-  Future<void> load(int g) async {
+  Future<void> load(int g) {
+    if (_loading != null) {
+      _dirty = true;
+      return _loading!;
+    }
+    late final Future<void> work;
+    work =
+        (() async {
+          do {
+            current(g);
+            _dirty = false;
+            await _loadOnce(g);
+          } while (_dirty && _token != null);
+        })().whenComplete(() {
+          if (identical(_loading, work)) _loading = null;
+        });
+    _loading = work;
+    return work;
+  }
+
+  Future<void> _loadOnce(int g) async {
     final data = await call('/api/notes', g);
     final rows = data['notes'] as List;
     if (rows.length > 100) throw const FormatException();
@@ -424,6 +555,7 @@ class NotesSession extends ChangeNotifier {
       throw const FormatException();
     }
     notes = parsed;
+    changed();
   }
 
   Future<void> refresh() => action(load);
@@ -552,6 +684,11 @@ class NotesSession extends ChangeNotifier {
       client.close();
     }
     await _closing;
+    try {
+      await _eventsCleanup.timeout(dependencies.cleanupTimeout);
+    } catch (_) {
+      /* bounded shutdown */
+    }
     try {
       await _saving.timeout(dependencies.cleanupTimeout);
     } catch (_) {

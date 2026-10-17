@@ -11,18 +11,21 @@
   changes after health/me validation and subscription, preserves drafts and unknown
   write messages, and cancels event readers/retry timers with session ownership.
 
-## Next: Flutter event consumers
+## Flutter event consumers and cross-platform evidence
 
-Use streamed Dart HTTP through the existing loopback SDK attachment, with a dedicated
-event HTTP client and setup/idle deadlines. Match browser contract vectors and
-refresh/retry/auth policies. Verify browser-to-Flutter and Flutter-to-browser updates,
-foreground/background cleanup, logout/expiry, host restart and interrupted writes.
-Flutter can retain its dev.2 native SDK pin; no new native transport API is required.
+Flutter now uses streamed Dart HTTP through the existing loopback SDK attachment,
+with a dedicated event client and setup/idle deadlines. Bounded parsing and
+refresh/retry/auth policies match the browser. Android ARM64 16 KiB emulator plus
+production Chromium pass bidirectional live CRUD, isolation, missed-change refresh,
+draft retention, suspend/resume, logout/expiry and 65s real-heartbeat stability.
+Host restart/interrupted writes and autonomous release acceptance also pass.
+Flutter retains dev.2; no new native transport API is required. See events.md.
 
 ## Then: streaming acceptance and WebSockets
 
-Before calling SSE complete, verify both packaged apps across multiple heartbeat
-intervals, old buffered deadlines, reconnects and repeated cancellation. Physical
+Packaged apps now have emulator/desktop evidence across heartbeat intervals,
+old buffered deadlines, reconnects and cancellation. Broaden physical/mobile and
+real-network acceptance before claiming full platform SSE completion. Physical
 mobile runtime/network evidence is separate from emulator/desktop CI results.
 Next protocol slice is authenticated `/api/ws` with bounded messages, session
 rechecks and explicit close/recovery behavior. Never replay application mutations.
