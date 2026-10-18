@@ -1,11 +1,13 @@
 import React, { useEffect, useState, useSyncExternalStore } from 'react';
 import { createRoot } from 'react-dom/client';
-import { LochoClient, LochoTicket } from 'locho_web';
+import { initializeLocho, LochoClient, LochoTicket } from 'locho_web';
+import wasmUrl from 'locho_web/wasm?url';
 import { Session, type Note } from './session';
 import { IndexedCredentials } from './storage';
 import './style.css';
 
 const session = new Session(async (text) => {
+  await initializeLocho(wasmUrl);
   const ticket = await LochoTicket.parse(text);
   const metadata = ticket.metadata;
   if (metadata.serviceType !== 'tcp') throw new Error('TCP ticket required');
