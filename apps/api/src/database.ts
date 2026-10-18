@@ -6,8 +6,12 @@ export function openDatabase(path: string): DatabaseSync {
   if (path !== ':memory:') mkdirSync(dirname(path), { recursive: true, mode: 0o700 });
   const db = new DatabaseSync(path);
   db.exec('PRAGMA foreign_keys = ON; PRAGMA journal_mode = WAL; PRAGMA busy_timeout = 5000;');
-  const version = (db.prepare('PRAGMA user_version').get() as { user_version: number }).user_version;
-  if (version > 1) { db.close(); throw new Error('Unsupported database schema version'); }
+  const version = (db.prepare('PRAGMA user_version').get() as { user_version: number })
+    .user_version;
+  if (version > 1) {
+    db.close();
+    throw new Error('Unsupported database schema version');
+  }
   if (version === 0) {
     db.exec(`
       BEGIN IMMEDIATE;

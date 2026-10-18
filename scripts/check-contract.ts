@@ -12,6 +12,7 @@ const validateEvent = ajv.compile({ $ref: 'notes#/definitions/NoteChange' });
 if (!validateEvent(event)) throw new Error('Invalid NoteChange fixture');
 for (const [name, value] of Object.entries(fixtures)) {
   const validate = ajv.compile({ $ref: `notes#/definitions/${name}` });
-  if (!validate(value)) throw new Error(`Invalid ${name} fixture: ${ajv.errorsText(validate.errors)}`);
+  if (!validate(value))
+    throw new Error(`Invalid ${name} fixture: ${ajv.errorsText(validate.errors)}`);
 }
 console.log('OpenAPI and response fixtures validated.');

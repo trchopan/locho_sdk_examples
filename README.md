@@ -107,8 +107,10 @@ to verify the disposable Compose stack and Caddy HTTPS/CSP with packaged browser
 clients installed from npm. Package-manager caches can accelerate repeated installs;
 fresh installation uses npm/pub.dev and verifies the lockfile integrity values.
 
-`npm run check` runs TypeScript checking, production compilation, backend tests,
-OpenAPI validation and fixture-schema checks. Tests cover sessions, expiry,
+`npm run check` runs Biome linting and formatting checks, TypeScript checking,
+production compilation, backend tests, OpenAPI validation and fixture-schema checks.
+Use `npm run format` to rewrite supported Node files after making changes. Tests cover
+sessions, expiry,
 revocation, two-user isolation, Unicode/byte limits, malformed requests, persistence,
 safe diagnostics and a real HTTP listener. They use temporary/in-memory databases.
 
