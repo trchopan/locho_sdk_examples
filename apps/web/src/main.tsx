@@ -4,20 +4,27 @@ import { initializeLocho, LochoClient, LochoTicket } from 'locho_web';
 import wasmUrl from 'locho_web/wasm?url';
 import { Session, type Note } from './session';
 import { IndexedCredentials } from './storage';
+import { CookieBridge } from './cookie-transport';
 import './style.css';
 
-const session = new Session(async (text) => {
-  await initializeLocho(wasmUrl);
-  const ticket = await LochoTicket.parse(text);
-  const metadata = ticket.metadata;
-  if (metadata.serviceType !== 'tcp') throw new Error('TCP ticket required');
-  return {
-    key: `${metadata.hostId}/${metadata.service}/${metadata.serviceType}`,
-    label: `${metadata.service} · ${metadata.hostId.slice(0, 12)}`,
-    export: () => ticket.export(),
-    connect: (signal) => LochoClient.connect({ ticket, signal, http: { authority: 'sample-api' } }),
-  };
-}, new IndexedCredentials());
+const mode = new URL(location.href).searchParams.get('auth') === 'bearer' ? 'bearer' : 'cookie';
+const bridge = new CookieBridge(() => session.workerReset());
+const session =
+  mode === 'cookie'
+    ? new Session((text) => bridge.pair(text), undefined, {}, 'cookie')
+    : new Session(async (text) => {
+        await initializeLocho(wasmUrl);
+        const ticket = await LochoTicket.parse(text);
+        const metadata = ticket.metadata;
+        if (metadata.serviceType !== 'tcp') throw new Error('TCP ticket required');
+        return {
+          key: `${metadata.hostId}/${metadata.service}/${metadata.serviceType}`,
+          label: `${metadata.service} · ${metadata.hostId.slice(0, 12)}`,
+          export: () => ticket.export(),
+          connect: (signal) =>
+            LochoClient.connect({ ticket, signal, http: { authority: 'sample-api' } }),
+        };
+      }, new IndexedCredentials());
 window.addEventListener('pagehide', () => session.suspend());
 window.addEventListener('pageshow', () => {
   void session.resume();
@@ -48,23 +55,52 @@ function App() {
     <main>
       <h1>Locho Notes</h1>
       <p>Private notes through your Locho TCP service.</p>
+      <label>
+        Authentication mode
+        <select
+          value={mode}
+          onChange={(event) => {
+            const next = event.target.value;
+            session.disconnect();
+            void bridge.forget().finally(() => {
+              const url = new URL(location.href);
+              url.searchParams.set('auth', next);
+              location.assign(url);
+            });
+          }}
+        >
+          <option value="cookie">Cookie session (service worker)</option>
+          <option value="bearer">Bearer session (legacy / Flutter-compatible)</option>
+        </select>
+      </label>
+      {mode === 'cookie' && (
+        <p>
+          Application-managed cookie session in service-worker memory. No browser cookie jar or
+          remembered credentials. Worker restart or a fresh page load requires pairing and login
+          again. Same-origin scripts remain trusted; this is not native HttpOnly isolation.
+        </p>
+      )}
       <p role="status">
         {state.phase}
         {state.label && ` · ${state.label}`}
       </p>
-      <p>
-        {state.remember
-          ? 'Remember enabled. Saved credentials are revalidated before notes are restored.'
-          : 'Memory-only pairing and login. Nothing is remembered after a fresh page load.'}
-      </p>
-      <label>
-        <input
-          type="checkbox"
-          checked={state.remember}
-          onChange={(e) => void session.setRemember(e.target.checked)}
-        />
-        Remember this device
-      </label>
+      {mode === 'bearer' && (
+        <>
+          <p>
+            {state.remember
+              ? 'Remember enabled. Saved credentials are revalidated before notes are restored.'
+              : 'Memory-only pairing and login. Nothing is remembered after a fresh page load.'}
+          </p>
+          <label>
+            <input
+              type="checkbox"
+              checked={state.remember}
+              onChange={(e) => void session.setRemember(e.target.checked)}
+            />
+            Remember this device
+          </label>
+        </>
+      )}
       {state.storageBusy && <p>Updating saved credentials…</p>}
       {state.storageError && (
         <p role="alert">

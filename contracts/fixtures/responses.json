@@ -2,6 +2,7 @@
   "Health": { "service": "locho-notes", "apiVersion": 1 },
   "Login": { "token": "fixture-token-not-a-credential-000000000000000", "expiresAt": "2026-11-14T00:00:00.000Z", "user": { "id": "fixture-user-1", "email": "alice@example.test" } },
   "Me": { "user": { "id": "fixture-user-1", "email": "alice@example.test" }, "expiresAt": "2026-11-14T00:00:00.000Z" },
+  "CookieLogin": { "user": { "id": "fixture-user-1", "email": "alice@example.test" }, "expiresAt": "2026-11-14T00:00:00.000Z" },
   "NoteResult": { "note": { "id": "fixture-note-1", "title": "First note", "body": "Private notes through Locho.", "createdAt": "2026-10-14T00:00:00.000Z", "updatedAt": "2026-10-14T00:00:00.000Z" } },
   "Notes": { "notes": [] },
   "ApiError": { "error": { "code": "invalid_session", "message": "A valid session is required." } }

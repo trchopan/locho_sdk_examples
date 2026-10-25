@@ -1,0 +1,6 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": { "lib": ["ES2022", "WebWorker"] },
+  "include": ["src/notes-worker.ts", "src/vite-env.d.ts"],
+  "exclude": []
+}

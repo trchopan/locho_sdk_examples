@@ -1,6 +1,24 @@
 # Development roadmap and handoffs
 
-## Current milestone: registry beta acceptance
+## Current slice: browser cookie-session demonstration
+
+The notes app now defaults to a module-worker, memory-only cookie session, with
+explicit legacy bearer mode and unchanged Flutter routes. OpenAPI 1.2.0 adds the
+browser namespace; schema v2 separates authentication transports. See
+[cookie-session design, evidence and remaining gates](cookie-sessions.md).
+The browser now pins published `locho_web@0.1.0-beta.3`; the temporary package archive
+and Docker copy step are removed. Local registry acceptance passes all 55 active
+Chromium/Firefox/WebKit cases with five expected skips, including the four prior
+Firefox restore/re-pair failures. No whole-test retries or application-write replay were
+enabled. Compose/HTTPS, hosted CI and mobile interoperability remain separate gates.
+Earlier milestones below describe the previous registry baseline.
+
+The first sequence—browser SDK migration and local cookie-session acceptance—is
+complete. Host CLI `1.3.0-beta.1` and Flutter SDK `0.1.0-beta.1` remain deliberately
+unchanged. Coordinated host/Flutter release alignment has not started and will be
+reviewed separately; this completion does not close the deployment/mobile gates above.
+
+## Earlier milestone: registry beta.1 acceptance
 
 Both apps pin public `0.1.0-beta.1` SDKs and install through npm/pub.dev with
 committed lockfiles. Archive download/bootstrap steps have been removed from setup,

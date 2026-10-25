@@ -21,16 +21,23 @@ IPs. It has a 10000-key cap, rejects new keys when full and expires windows.
 Limiter state resets on process restart; this is a reference sample, not distributed
 authentication infrastructure.
 
-The first database open applies schema v1 (users/sessions/notes/indexes) transactionally.
+The first database open creates users/sessions/notes/indexes and migrates to schema
+v2, adding a checked `auth_mode` to sessions. Existing sessions become bearer sessions;
+users, notes and hashes are retained. Each migration runs transactionally.
+Back up retained databases before upgrading: the old v1 server rejects v2 databases,
+so rolling back the server also requires restoring a pre-upgrade database backup.
 WAL and foreign keys are enabled. Open rejects a newer unknown schema. Reset deletes
 demo data through SQL; stop the server first. Use a private writable data directory.
 
 ## API behavior
 
 See `contracts/openapi.yaml` and `schemas.json`. Responses are UTF-8 JSON; private
-data/token responses have `Cache-Control: no-store`. No cookies, redirects,
-canonical-host restrictions or browser-origin policy are needed: both SDKs transport
-ordinary HTTP bytes through a TCP service. Local loopback Host values are supported.
+data/token responses have `Cache-Control: no-store`. Both SDKs transport ordinary
+HTTP bytes through a TCP service. Local loopback Host values are supported.
+The additive `/browser` namespace uses cookie-mode credentials and an explicit
+`X-Locho-Session-Mode: cookie` marker. It rejects Origin/Authorization headers and
+cross-site Fetch Metadata; no permissive CORS or ambient browser-cookie API is offered.
+See [cookie sessions](cookie-sessions.md). Existing bearer routes remain unchanged.
 
 - `/health` verifies API identity/version separately from Locho peer connectivity.
 - Login returns `{token,expiresAt,user}`; `/api/me` validates saved sessions.
@@ -51,7 +58,7 @@ service access; it does not identify a backend user.
 
 ## Application rules
 
-Both future apps distinguish transport, API readiness and authentication. Remember
+Both apps distinguish transport, API readiness and authentication. In bearer mode, remember
 off means memory-only. Remember on stores ticket/token in browser IndexedDB or
 mobile secure storage. Never save passwords. Scope tokens by full host ID and
 service name/type, not relay/local port/capability secret.
@@ -62,6 +69,11 @@ but is not server revocation. Offline logout reports unconfirmed revocation.
 Authenticated API 401 removes the token, retaining pairing. Transport failure
 retains credentials. Restore/recover via health and `/api/me` before showing notes.
 Interrupted mutations have unknown server outcome; offer refresh, never silently replay.
+
+Cookie mode stores credentials only in worker memory; disconnect removes its cookie,
+and a fresh page or worker loss requires pairing/login. Backend lifetimes above
+30 days remain supported, but the demo worker caps its local cookie lifetime at
+30 days. Server expiry/revocation remains authoritative.
 
 ## Platform and deployment notes
 

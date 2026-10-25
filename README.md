@@ -2,8 +2,13 @@
 
 Full Flutter and browser application demonstrations sharing one reference notes
 API. SDKs and tiny package smoke apps are maintained in the separate `locho`
-repository. `apps/web` consumes `locho_web` **0.1.0-beta.1** from npm, with opt-in
-IndexedDB sessions and validated restoration. `apps/flutter` consumes
+repository. `apps/web` now demonstrates **worker-managed cookie sessions** by
+default, with a separately selectable bearer/IndexedDB mode. It consumes
+`locho_web` **0.1.0-beta.3** from npm, including the public metadata APIs; see the
+[cookie-session guide](docs/cookie-sessions.md).
+The local Chromium/Firefox/WebKit matrix passes against this registry release;
+deployment and mobile acceptance remain separate gates.
+`apps/flutter` consumes
 `locho_flutter` **0.1.0-beta.1** from pub.dev for foreground notes and opt-in secure
 storage. Both apps support live note updates through the shared API. See
 [Flutter setup](apps/flutter/README.md) and [compatibility](docs/compatibility.md).
@@ -21,8 +26,8 @@ npm run seed
 npm run dev:api
 ```
 
-Dependencies install directly from public registries using the committed lockfiles.
-No SDK archive bootstrap or GitHub authentication is required. See
+Dependencies install from npm/pub.dev using committed lockfiles. No SDK compilation,
+archive bootstrap or GitHub authentication is required. See
 [browser app setup and acceptance](apps/web/README.md). Flutter uses `flutter pub get`
 from `apps/flutter`; its SDK bundles native Rust sources and requires Rust/platform
 build toolchains.
@@ -95,7 +100,7 @@ docs/compatibility.md         # tested artifacts and delivery gates
 docs/roadmap.md               # next development slices/team handoffs
 ```
 
-Both application consumers use exact registry SDK versions and committed lockfiles.
+Both application consumers use exact SDK artifacts and committed lockfiles.
 The Flutter app keeps its own Dart dependencies/builds; the web/API workspace keeps
 Node dependencies. Backend and contract changes update both consumers together.
 
@@ -105,7 +110,8 @@ Private-container backend and static HTTPS setup are documented in
 [deployment and reproducible handoff](docs/deployment.md). Run `npm run test:deployment`
 to verify the disposable Compose stack and Caddy HTTPS/CSP with packaged browser
 clients installed from npm. Package-manager caches can accelerate repeated installs;
-fresh installation uses npm/pub.dev and verifies the lockfile integrity values.
+fresh installation verifies the lockfile integrity values. Current registry release
+acceptance and remaining gates are recorded in [cookie sessions](docs/cookie-sessions.md).
 
 `npm run check` runs Biome linting and formatting checks, TypeScript checking,
 production compilation, backend tests, OpenAPI validation and fixture-schema checks.

@@ -4,13 +4,13 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "vite --host 127.0.0.1",
-    "typecheck": "tsc --noEmit",
-    "build": "vite build",
+    "dev": "npm run build && vite preview --host 127.0.0.1 --port 5173",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.worker.json",
+    "build": "vite build && vite build --config vite.worker.config.ts",
     "test": "node --import tsx --test test/*.test.ts"
   },
   "dependencies": {
-    "locho_web": "0.1.0-beta.1",
+    "locho_web": "0.1.0-beta.3",
     "react": "19.2.0",
     "react-dom": "19.2.0"
   },

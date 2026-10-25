@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Locho reference notes API
-  version: 1.1.0
+  version: 1.2.0
   description: |
     API v1 shared by Flutter and browser applications. HTTP travels inside a
     Locho TCP attachment; bearer tokens authenticate backend users separately.
@@ -11,7 +11,11 @@ info:
     bytes. Reject C0 controls except body newline/carriage-return/tab and reject
     lone UTF-16 surrogates. Request limit 64 KiB; notes cap 100; list limit 4 MiB.
     Sessions expire after an absolute configurable lifetime (default 30 days).
-    Remember-device affects only client persistence. No redirects, cookies or renewal.
+    Remember-device affects only bearer client persistence. No redirects or renewal.
+    Browser cookie routes under /browser use independent, transport-bound sessions.
+    They require X-Locho-Session-Mode: cookie, reject Origin and Authorization headers,
+    and are intended for explicit Locho TCP SDK requests, not ambient browser cookies.
+    No permissive CORS is provided. Cookie-mode credentials are memory-only in the worker.
     Updates are last-write-wins. Lists sort updatedAt descending, ID ascending.
     Foreign and missing note IDs both return 404. 204 responses have no body.
 servers:
@@ -167,10 +171,140 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '404': { $ref: '#/components/responses/NotFound' }
         '500': { $ref: '#/components/responses/InternalError' }
+  /browser/auth/login:
+    parameters:
+      - $ref: '#/components/parameters/CookieMarker'
+    post:
+      operationId: browserLogin
+      security: []
+      description: |
+        Same credentials/rate limits as bearer login. Issues a separate cookie-mode
+        session. JSON contains only user/expiry, never the token. Cookie Path is
+        /browser/; no Domain; Secure, HttpOnly, SameSite=Strict, Expires and Max-Age.
+        Worker applications enforce their own scope/expiry policy; these attributes
+        do not provide native browser-cookie protections for application-managed state.
+      requestBody:
+        $ref: '#/paths/~1auth~1login/post/requestBody'
+      responses:
+        '200':
+          description: New cookie session; Cache-Control no-store
+          headers:
+            Set-Cookie:
+              description: Sensitive session credential; never log or forward to the page
+              schema: { type: string }
+          content:
+            application/json:
+              schema: { $ref: './schemas.json#/definitions/CookieLogin' }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '413': { $ref: '#/components/responses/TooLarge' }
+        '429': { $ref: '#/paths/~1auth~1login/post/responses/429' }
+        '500': { $ref: '#/components/responses/InternalError' }
+  /browser/auth/logout:
+    parameters:
+      - $ref: '#/components/parameters/CookieMarker'
+    post:
+      operationId: browserLogout
+      security: [{ cookieSession: [] }]
+      description: Revokes this session and closes its SSE streams. Idempotent even for missing/expired sessions; always emits deletion metadata after transport validation.
+      responses:
+        '204':
+          description: Session revoked or already absent
+          headers:
+            Set-Cookie:
+              description: Same name/path, empty value, Max-Age=0 and past Expires
+              schema: { type: string }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '500': { $ref: '#/components/responses/InternalError' }
+  /browser/api/me:
+    parameters:
+      - $ref: '#/components/parameters/CookieMarker'
+    get:
+      operationId: browserCurrentSession
+      security: [{ cookieSession: [] }]
+      responses:
+        '200': { $ref: '#/paths/~1api~1me/get/responses/200' }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '500': { $ref: '#/components/responses/InternalError' }
+  /browser/api/events:
+    parameters:
+      - $ref: '#/components/parameters/CookieMarker'
+    get:
+      operationId: browserNoteEvents
+      security: [{ cookieSession: [] }]
+      description: Same bounded SSE invalidation, heartbeat, expiry, revocation and capacity contract as /api/events; authenticated using a cookie-mode session only.
+      responses:
+        '200': { $ref: '#/paths/~1api~1events/get/responses/200' }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '429': { $ref: '#/paths/~1api~1events/get/responses/429' }
+        '500': { $ref: '#/components/responses/InternalError' }
+  /browser/api/notes:
+    parameters:
+      - $ref: '#/components/parameters/CookieMarker'
+    get:
+      operationId: browserListNotes
+      security: [{ cookieSession: [] }]
+      responses:
+        '200': { $ref: '#/paths/~1api~1notes/get/responses/200' }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '500': { $ref: '#/components/responses/InternalError' }
+    post:
+      operationId: browserCreateNote
+      security: [{ cookieSession: [] }]
+      requestBody: { $ref: '#/paths/~1api~1notes/post/requestBody' }
+      responses:
+        '201': { $ref: '#/paths/~1api~1notes/post/responses/201' }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '409': { $ref: '#/paths/~1api~1notes/post/responses/409' }
+        '413': { $ref: '#/components/responses/TooLarge' }
+        '500': { $ref: '#/components/responses/InternalError' }
+  /browser/api/notes/{id}:
+    parameters:
+      - $ref: '#/components/parameters/CookieMarker'
+      - name: id
+        in: path
+        required: true
+        schema: { type: string, minLength: 1 }
+    patch:
+      operationId: browserUpdateNote
+      security: [{ cookieSession: [] }]
+      requestBody: { $ref: '#/paths/~1api~1notes~1{id}/patch/requestBody' }
+      responses:
+        '200': { $ref: '#/paths/~1api~1notes~1{id}/patch/responses/200' }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '413': { $ref: '#/components/responses/TooLarge' }
+        '500': { $ref: '#/components/responses/InternalError' }
+    delete:
+      operationId: browserDeleteNote
+      security: [{ cookieSession: [] }]
+      responses:
+        '204': { $ref: '#/paths/~1api~1notes~1{id}/delete/responses/204' }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/InternalError' }
 components:
+  parameters:
+    CookieMarker:
+      name: X-Locho-Session-Mode
+      in: header
+      required: true
+      schema: { type: string, enum: [cookie] }
+      description: Explicit non-simple request marker. Origin and Authorization must be absent; no ambient-cookie/CORS browser API is offered.
   schemas:
     NoteChange: { $ref: './schemas.json#/definitions/NoteChange' }
   securitySchemes:
+    cookieSession:
+      type: apiKey
+      in: cookie
+      name: locho_notes_session
+      description: Sensitive opaque cookie-mode credential, explicitly attached by the Locho worker, never interchangeable with a bearer session
     bearerSession:
       type: http
       scheme: bearer

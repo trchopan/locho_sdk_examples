@@ -1,13 +1,7 @@
-import { test, expect, type Page, type APIRequestContext } from '@playwright/test';
-import { enterTicket } from './support';
-
-async function command(request: APIRequestContext, action: string) {
-  const response = await request.post(`${process.env.LOCHO_BROWSER_CONTROL}/${action}`);
-  expect(response.ok()).toBe(true);
-  return response.json();
-}
+import { test, expect, type Page } from '@playwright/test';
+import { enterTicket, fixtureCommand as command } from './support';
 async function login(page: Page) {
-  await page.goto('/');
+  await page.goto('/?auth=bearer');
   await enterTicket(page);
   await page.getByRole('button', { name: 'Pair', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Login' })).toBeVisible({ timeout: 35000 });
@@ -105,7 +99,7 @@ test('new page owner restores saved session after old page closes', async ({ pag
   await expect(page.getByText('Updating saved credentials…', { exact: true })).toHaveCount(0);
   await page.close();
   const next = await context.newPage();
-  await next.goto('/');
+  await next.goto('/?auth=bearer');
   await expect(next.getByRole('heading', { name: 'Notes for alice@example.test' })).toBeVisible({
     timeout: 35000,
   });

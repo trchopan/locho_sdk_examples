@@ -163,6 +163,17 @@ export async function createApp(options: AppOptions = {}) {
 
   app.addHook('onRequest', async (request, reply) => {
     if (request.url !== '/health') reply.header('Cache-Control', 'no-store');
+    // This namespace is for explicitly authenticated Locho requests, not ambient
+    // browser cookies. The worker sends this non-simple marker over the TCP SDK.
+    if (request.routeOptions.url?.startsWith('/browser/')) {
+      if (
+        request.headers['x-locho-session-mode'] !== 'cookie' ||
+        request.headers.origin !== undefined ||
+        request.headers['sec-fetch-site'] === 'cross-site' ||
+        request.headers.authorization !== undefined
+      )
+        throw invalidRequest();
+    }
   });
   app.setErrorHandler((error, request, reply) => {
     const frameworkError = error as FastifyError;
@@ -196,14 +207,37 @@ export async function createApp(options: AppOptions = {}) {
   });
 
   function session(request: FastifyRequest): Session {
+    const cookieMode = request.routeOptions.url?.startsWith('/browser/') ?? false;
     const authorization = request.headers.authorization;
-    if (!authorization || !/^Bearer [A-Za-z0-9_-]{43}$/i.test(authorization)) throw unauthorized();
-    const token = authorization.slice(7);
+    let token: string;
+    if (cookieMode) {
+      const pairs = (request.headers.cookie ?? '').split(';').map((part) => part.trim());
+      const sessions = pairs.filter((part) => part.split('=')[0] === 'locho_notes_session');
+      const candidate = sessions[0];
+      if (
+        authorization ||
+        sessions.length !== 1 ||
+        !candidate ||
+        !/^locho_notes_session=[A-Za-z0-9_-]{43}$/.test(candidate)
+      )
+        throw unauthorized();
+      token = candidate.slice('locho_notes_session='.length);
+    } else {
+      if (
+        request.headers.cookie ||
+        !authorization ||
+        !/^Bearer [A-Za-z0-9_-]{43}$/i.test(authorization)
+      )
+        throw unauthorized();
+      token = authorization.slice(7);
+    }
     const hash = tokenHash(token);
     const row = db
       .prepare(`SELECT u.id, u.email, s.expires_at FROM sessions s JOIN users u ON u.id = s.user_id
-      WHERE s.token_hash = ? AND s.revoked_at IS NULL AND s.expires_at > ?`)
-      .get(hash, clock()) as { id: string; email: string; expires_at: number } | undefined;
+      WHERE s.token_hash = ? AND s.revoked_at IS NULL AND s.expires_at > ? AND s.auth_mode = ?`)
+      .get(hash, clock(), cookieMode ? 'cookie' : 'bearer') as
+      | { id: string; email: string; expires_at: number }
+      | undefined;
     if (!row) throw unauthorized();
     return { user: { id: row.id, email: row.email }, tokenHash: hash, expiresAt: row.expires_at };
   }
@@ -237,162 +271,190 @@ export async function createApp(options: AppOptions = {}) {
     service: 'locho-notes',
     apiVersion: 1,
   }));
-  app.post<{ Body: { email: string; password: string } }>(
-    '/auth/login',
-    {
-      schema: { body: responseSchema('LoginInput'), response: { 200: responseSchema('Login') } },
-    },
-    async (request, reply) => {
-      const email = emailValue(request.body.email);
-      const password = passwordValue(request.body.password);
-      limitLogin(email, reply);
-      const user = db
-        .prepare('SELECT id, email, password_hash FROM users WHERE email = ?')
-        .get(email) as { id: string; email: string; password_hash: string } | undefined;
-      const valid = await verifyPassword(user?.password_hash ?? dummyHash, password);
-      if (!user || !valid)
-        throw new ApiFailure(401, 'invalid_credentials', 'Email or password is incorrect.');
-      const now = clock();
-      const token = randomBytes(32).toString('base64url');
-      const expiresAt = now + lifetime;
-      db.prepare(
-        'INSERT INTO sessions(token_hash, user_id, created_at, expires_at) VALUES (?, ?, ?, ?)',
-      ).run(tokenHash(token), user.id, now, expiresAt);
-      return {
-        token,
-        expiresAt: new Date(expiresAt).toISOString(),
-        user: { id: user.id, email: user.email },
-      };
-    },
-  );
-  app.get('/api/me', { schema: { response: { 200: responseSchema('Me') } } }, async (request) => {
-    const current = session(request);
-    return { user: current.user, expiresAt: new Date(current.expiresAt).toISOString() };
-  });
-  app.post('/auth/logout', async (request, reply) => {
-    const current = session(request);
-    db.prepare('UPDATE sessions SET revoked_at = ? WHERE token_hash = ?').run(
-      clock(),
-      current.tokenHash,
-    );
-    events.revoke(current.tokenHash);
-    return reply.code(204).send();
-  });
-  app.get('/api/events', async (request, reply) => {
-    const current = session(request);
-    const stream = events.subscribe(current.user.id, current.tokenHash);
-    if (!stream) {
-      reply.header('Retry-After', '30');
-      throw new ApiFailure(429, 'rate_limited', 'Event subscription limit reached.');
-    }
-    reply.header('Content-Type', 'text/event-stream; charset=utf-8');
-    reply.header('Cache-Control', 'no-store');
-    reply.header('X-Accel-Buffering', 'no');
-    // Fastify destroys piped streams on client cancellation; explicitly retain the
-    // close binding so admission capacity is released on all socket teardown paths.
-    reply.raw.once('close', () => stream.destroy());
-    stream.once('close', () => {
-      if (!reply.raw.writableEnded) reply.raw.destroy();
-    });
-    return reply.send(stream);
-  });
-  app.get(
-    '/api/notes',
-    { schema: { response: { 200: responseSchema('Notes') } } },
-    async (request) => {
-      const current = session(request);
-      const rows = db
-        .prepare(
-          'SELECT id, title, body, created_at, updated_at FROM notes WHERE user_id = ? ORDER BY updated_at DESC, id ASC',
-        )
-        .all(current.user.id) as NoteRow[];
-      const result = { notes: rows.map(noteOutput) };
-      if (Buffer.byteLength(JSON.stringify(result)) > 4 * 1024 * 1024)
-        throw new Error('Response size limit');
-      return result;
-    },
-  );
-  app.post<{ Body: { title: string; body: string } }>(
-    '/api/notes',
-    {
-      onRequest: authenticated,
-      schema: {
-        body: responseSchema('CreateNote'),
-        response: { 201: responseSchema('NoteResult') },
+  // Register the same business handlers with separate authentication contracts.
+  for (const prefix of ['', '/browser']) {
+    const cookieMode = prefix === '/browser';
+    app.post<{ Body: { email: string; password: string } }>(
+      `${prefix}/auth/login`,
+      {
+        schema: {
+          body: responseSchema('LoginInput'),
+          response: { 200: responseSchema(cookieMode ? 'CookieLogin' : 'Login') },
+        },
       },
-    },
-    async (request, reply) => {
-      const current = session(request);
-      const values = noteValues(request.body);
-      if (values.title === undefined || values.body === undefined) throw invalidRequest();
-      const now = new Date(clock()).toISOString();
-      const note = {
-        id: randomUUID(),
-        title: values.title,
-        body: values.body,
-        createdAt: now,
-        updatedAt: now,
-      };
-      db.exec('BEGIN IMMEDIATE');
-      try {
-        const count = db
-          .prepare('SELECT count(*) AS count FROM notes WHERE user_id = ?')
-          .get(current.user.id) as { count: number };
-        if (count.count >= 100)
-          throw new ApiFailure(
-            409,
-            'note_limit',
-            'This demonstration account has reached 100 notes.',
-          );
+      async (request, reply) => {
+        const email = emailValue(request.body.email);
+        const password = passwordValue(request.body.password);
+        limitLogin(email, reply);
+        const user = db
+          .prepare('SELECT id, email, password_hash FROM users WHERE email = ?')
+          .get(email) as { id: string; email: string; password_hash: string } | undefined;
+        const valid = await verifyPassword(user?.password_hash ?? dummyHash, password);
+        if (!user || !valid)
+          throw new ApiFailure(401, 'invalid_credentials', 'Email or password is incorrect.');
+        const now = clock();
+        const token = randomBytes(32).toString('base64url');
+        const expiresAt = now + lifetime;
         db.prepare(
-          'INSERT INTO notes(id, user_id, title, body, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)',
-        ).run(note.id, current.user.id, note.title, note.body, now, now);
-        db.exec('COMMIT');
+          'INSERT INTO sessions(token_hash, user_id, created_at, expires_at, auth_mode) VALUES (?, ?, ?, ?, ?)',
+        ).run(tokenHash(token), user.id, now, expiresAt, cookieMode ? 'cookie' : 'bearer');
+        if (cookieMode)
+          reply.header(
+            'Set-Cookie',
+            `locho_notes_session=${token}; Path=/browser/; Expires=${new Date(expiresAt).toUTCString()}; Max-Age=${Math.max(1, Math.ceil(lifetime / 1000))}; HttpOnly; Secure; SameSite=Strict`,
+          );
+        return {
+          ...(cookieMode ? {} : { token }),
+          expiresAt: new Date(expiresAt).toISOString(),
+          user: { id: user.id, email: user.email },
+        };
+      },
+    );
+    app.get(
+      `${prefix}/api/me`,
+      { schema: { response: { 200: responseSchema('Me') } } },
+      async (request) => {
+        const current = session(request);
+        return { user: current.user, expiresAt: new Date(current.expiresAt).toISOString() };
+      },
+    );
+    app.post(`${prefix}/auth/logout`, async (request, reply) => {
+      if (cookieMode)
+        reply.header(
+          'Set-Cookie',
+          'locho_notes_session=; Path=/browser/; Max-Age=0; Expires=Thu, 01 Jan 1970 00:00:00 GMT; HttpOnly; Secure; SameSite=Strict',
+        );
+      let current: Session;
+      try {
+        current = session(request);
       } catch (error) {
-        db.exec('ROLLBACK');
+        if (cookieMode && error instanceof ApiFailure && error.status === 401)
+          return reply.code(204).send();
         throw error;
       }
-      events.publish(current.user.id, { operation: 'created', noteId: note.id });
-      return reply.code(201).send({ note });
-    },
-  );
-  app.patch<{ Params: { id: string }; Body: { title?: string; body?: string } }>(
-    '/api/notes/:id',
-    {
-      onRequest: authenticated,
-      schema: {
-        body: responseSchema('PatchNote'),
-        response: { 200: responseSchema('NoteResult') },
-      },
-    },
-    async (request) => {
+      db.prepare('UPDATE sessions SET revoked_at = ? WHERE token_hash = ?').run(
+        clock(),
+        current.tokenHash,
+      );
+      events.revoke(current.tokenHash);
+      return reply.code(204).send();
+    });
+    app.get(`${prefix}/api/events`, async (request, reply) => {
       const current = session(request);
-      const values = noteValues(request.body);
-      const row = db
-        .prepare(
-          'SELECT id, title, body, created_at, updated_at FROM notes WHERE id = ? AND user_id = ?',
-        )
-        .get(request.params.id, current.user.id) as NoteRow | undefined;
-      if (!row) throw notFound();
-      row.title = values.title ?? row.title;
-      row.body = values.body ?? row.body;
-      row.updated_at = new Date(clock()).toISOString();
-      db.prepare(
-        'UPDATE notes SET title = ?, body = ?, updated_at = ? WHERE id = ? AND user_id = ?',
-      ).run(row.title, row.body, row.updated_at, row.id, current.user.id);
-      events.publish(current.user.id, { operation: 'updated', noteId: row.id });
-      return { note: noteOutput(row) };
-    },
-  );
-  app.delete<{ Params: { id: string } }>('/api/notes/:id', async (request, reply) => {
-    const current = session(request);
-    const result = db
-      .prepare('DELETE FROM notes WHERE id = ? AND user_id = ?')
-      .run(request.params.id, current.user.id);
-    if (result.changes === 0) throw notFound();
-    events.publish(current.user.id, { operation: 'deleted', noteId: request.params.id });
-    return reply.code(204).send();
-  });
+      const stream = events.subscribe(current.user.id, current.tokenHash);
+      if (!stream) {
+        reply.header('Retry-After', '30');
+        throw new ApiFailure(429, 'rate_limited', 'Event subscription limit reached.');
+      }
+      reply.header('Content-Type', 'text/event-stream; charset=utf-8');
+      reply.header('Cache-Control', 'no-store');
+      reply.header('X-Accel-Buffering', 'no');
+      // Fastify destroys piped streams on client cancellation; explicitly retain the
+      // close binding so admission capacity is released on all socket teardown paths.
+      reply.raw.once('close', () => stream.destroy());
+      stream.once('close', () => {
+        if (!reply.raw.writableEnded) reply.raw.destroy();
+      });
+      return reply.send(stream);
+    });
+    app.get(
+      `${prefix}/api/notes`,
+      { schema: { response: { 200: responseSchema('Notes') } } },
+      async (request) => {
+        const current = session(request);
+        const rows = db
+          .prepare(
+            'SELECT id, title, body, created_at, updated_at FROM notes WHERE user_id = ? ORDER BY updated_at DESC, id ASC',
+          )
+          .all(current.user.id) as NoteRow[];
+        const result = { notes: rows.map(noteOutput) };
+        if (Buffer.byteLength(JSON.stringify(result)) > 4 * 1024 * 1024)
+          throw new Error('Response size limit');
+        return result;
+      },
+    );
+    app.post<{ Body: { title: string; body: string } }>(
+      `${prefix}/api/notes`,
+      {
+        onRequest: authenticated,
+        schema: {
+          body: responseSchema('CreateNote'),
+          response: { 201: responseSchema('NoteResult') },
+        },
+      },
+      async (request, reply) => {
+        const current = session(request);
+        const values = noteValues(request.body);
+        if (values.title === undefined || values.body === undefined) throw invalidRequest();
+        const now = new Date(clock()).toISOString();
+        const note = {
+          id: randomUUID(),
+          title: values.title,
+          body: values.body,
+          createdAt: now,
+          updatedAt: now,
+        };
+        db.exec('BEGIN IMMEDIATE');
+        try {
+          const count = db
+            .prepare('SELECT count(*) AS count FROM notes WHERE user_id = ?')
+            .get(current.user.id) as { count: number };
+          if (count.count >= 100)
+            throw new ApiFailure(
+              409,
+              'note_limit',
+              'This demonstration account has reached 100 notes.',
+            );
+          db.prepare(
+            'INSERT INTO notes(id, user_id, title, body, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)',
+          ).run(note.id, current.user.id, note.title, note.body, now, now);
+          db.exec('COMMIT');
+        } catch (error) {
+          db.exec('ROLLBACK');
+          throw error;
+        }
+        events.publish(current.user.id, { operation: 'created', noteId: note.id });
+        return reply.code(201).send({ note });
+      },
+    );
+    app.patch<{ Params: { id: string }; Body: { title?: string; body?: string } }>(
+      `${prefix}/api/notes/:id`,
+      {
+        onRequest: authenticated,
+        schema: {
+          body: responseSchema('PatchNote'),
+          response: { 200: responseSchema('NoteResult') },
+        },
+      },
+      async (request) => {
+        const current = session(request);
+        const values = noteValues(request.body);
+        const row = db
+          .prepare(
+            'SELECT id, title, body, created_at, updated_at FROM notes WHERE id = ? AND user_id = ?',
+          )
+          .get(request.params.id, current.user.id) as NoteRow | undefined;
+        if (!row) throw notFound();
+        row.title = values.title ?? row.title;
+        row.body = values.body ?? row.body;
+        row.updated_at = new Date(clock()).toISOString();
+        db.prepare(
+          'UPDATE notes SET title = ?, body = ?, updated_at = ? WHERE id = ? AND user_id = ?',
+        ).run(row.title, row.body, row.updated_at, row.id, current.user.id);
+        events.publish(current.user.id, { operation: 'updated', noteId: row.id });
+        return { note: noteOutput(row) };
+      },
+    );
+    app.delete<{ Params: { id: string } }>(`${prefix}/api/notes/:id`, async (request, reply) => {
+      const current = session(request);
+      const result = db
+        .prepare('DELETE FROM notes WHERE id = ? AND user_id = ?')
+        .run(request.params.id, current.user.id);
+      if (result.changes === 0) throw notFound();
+      events.publish(current.user.id, { operation: 'deleted', noteId: request.params.id });
+      return reply.code(204).send();
+    });
+  }
   return { app, db };
 }
 

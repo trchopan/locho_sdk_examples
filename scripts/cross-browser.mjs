@@ -37,7 +37,9 @@ export async function crossBrowser(fixture) {
     if (!ready) throw new Error('Cross-browser preview unavailable');
     browser = await chromium.launch();
     const page = await browser.newPage();
-    await page.goto('http://127.0.0.1:4173');
+    const mode = process.env.LOCHO_CROSS_BROWSER_AUTH ?? 'cookie';
+    if (!['cookie', 'bearer'].includes(mode)) throw new Error('Invalid browser auth mode');
+    await page.goto(`http://127.0.0.1:4173/?auth=${mode}`);
     await page.getByLabel('Attachment ticket').evaluate((element, value) => {
       Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(element, value);
       element.dispatchEvent(new Event('input', { bubbles: true }));

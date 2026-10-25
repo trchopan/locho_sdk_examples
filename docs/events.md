@@ -1,4 +1,12 @@
-# Authenticated note events — API v1 / OpenAPI 1.1.0
+# Authenticated note events — API v1 / OpenAPI 1.2.0
+
+Cookie-mode browsers use `/browser/api/events`, with the same framing, publication,
+capacity, expiry and revocation policy described below. Their module worker uses
+`fetchStreamWithMetadata`, processes sensitive metadata internally and forwards the
+original stream with allowlisted headers. Bearer browsers and Flutter retain
+`/api/events`. Both authentication modes share the same per-user event hub and note
+data. See [cookie-session architecture and current evidence](cookie-sessions.md).
+The registry/dev-package results below predate the cookie-mode enhancement.
 
 `GET /api/events` accepts the ordinary backend `Authorization: Bearer ...` session.
 It returns `text/event-stream; charset=utf-8`, `Cache-Control: no-store` and

@@ -19,7 +19,18 @@ export default defineConfig({
         reuseExistingServer: false,
       },
   projects: [
-    { name: 'chromium', use: devices['Desktop Chrome'] },
+    {
+      name: 'chromium',
+      use: {
+        ...devices['Desktop Chrome'],
+        // Chromium's service-worker script loader does not honor the context's
+        // ignoreHTTPSErrors setting. Only the disposable internal-CA fixture opts
+        // into this browser-process override; normal launches retain TLS checks.
+        ...(process.env.LOCHO_LOCAL_TLS_TEST === '1'
+          ? { launchOptions: { args: ['--ignore-certificate-errors'] } }
+          : {}),
+      },
+    },
     { name: 'firefox', use: devices['Desktop Firefox'] },
     { name: 'webkit', use: devices['Desktop Safari'] },
   ],

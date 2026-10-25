@@ -9,17 +9,19 @@ OS package repositories are not immutable digests; these Docker builds are repea
 instructions, not hermetic/reproducible-bit guarantees. Record built image IDs for
 your deployment and review base-image updates deliberately.
 
-Install the Node workspaces directly from npm:
+Install the Node workspaces with the committed lockfile:
 
 ```sh
 npm ci
 npm run check
 ```
 
-The browser pins `locho_web` 0.1.0-beta.1 and the root npm lockfile records its
-registry URL/SHA-512 integrity. Flutter pins `locho_flutter` 0.1.0-beta.1 from pub.dev;
+The browser pins published `locho_web` 0.1.0-beta.3 from npm; the root lockfile records
+its registry URL and SHA-512 integrity. No local SDK archive is required by installation
+or the API Docker build.
+Flutter pins `locho_flutter` 0.1.0-beta.1 from pub.dev;
 run `flutter pub get` in `apps/flutter` using its committed hosted-package lockfile.
-No SDK archives, vendor extraction or GitHub credentials are needed. Package-manager
+No archive bootstrap, vendor extraction or GitHub credentials are needed. Package-manager
 caches can accelerate repeated installs; cold installs require registry access.
 Flutter's SDK bundles Locho Rust sources but still needs the documented Rust/native
 build toolchains. See compatibility.md for exact versions/checksums and acceptance.
@@ -73,11 +75,16 @@ volumes. API/Locho can run on a different private machine; the website only serv
 static assets. Never copy ticket or token data into the website image/configuration.
 
 The provided Caddyfile sets WASM MIME, immutable caching for hashed assets, no-store
-for HTML, no-referrer, nosniff and CSP. CSP allows WebAssembly compilation and N0
+for HTML/worker, no-referrer, nosniff and CSP. CSP explicitly permits same-origin
+workers, WebAssembly compilation and N0
 HTTPS/WSS endpoints; applications choosing custom discovery/relays must add only
 their required origins. No blanket TLS/certificate bypass is configured for users.
-This configuration hosts at `/`; for a subpath set Vite `base` and adjust Caddy
-routing together. General package `/sdk/` support was verified separately in Locho.
+This configuration hosts at `/`. For a subpath set `VITE_PUBLIC_BASE=/your-path/`
+for both build steps and adjust the Caddy root/routing, worker path and gateway
+fallback together; application subpath deployment remains an acceptance gate.
+The worker has a stable URL, no-store/updateViaCache:none and no skipWaiting.
+An update waits for old clients to close; it must not replace active sessions
+silently. Gateway requests that reach Caddy return 503/reset, never backend data.
 
 ## Automated acceptance and evidence
 
@@ -94,9 +101,16 @@ on Chromium, Firefox and WebKit. It repeats the journey against a Caddy static H
 container with real CSP, secure-context, MIME/cache/header assertions. Finally it
 deletes only its own project's volumes and temporary credential file.
 
-Local macOS Docker ARM64 acceptance passed both three-browser journeys. The HTTPS
-test uses Caddy's internal CA, with `ignoreHTTPSErrors` enabled **only for this
-test invocation**; production uses public certificate verification. Thus CSP/HTTPS
+Historical bearer-mode macOS Docker ARM64 acceptance passed both three-browser journeys.
+Cookie-mode deployment acceptance is tracked separately in cookie-sessions.md. The HTTPS
+test uses Caddy's internal CA, with `LOCHO_LOCAL_TLS_TEST=1` enabling
+`ignoreHTTPSErrors` **only for this test invocation**. Chromium additionally needs
+a test-only `--ignore-certificate-errors` launch argument because its service-worker
+script loader does not honor the context-level setting. That browser-process
+override is confined to the disposable TLS test; it is not added to ordinary browser
+launches, Firefox/WebKit launch options, or production application/Caddy configuration.
+Never enable this test flag for real credentials or production trust acceptance.
+Production uses public certificate verification. Thus CSP/HTTPS
 transport/asset checks are demonstrated, but public DNS/ACME trust and actual public
 hosting remain operator/device acceptance, not claimed as completed. Container
 builds and public N0 require network access. Cold builds can be lengthy.
@@ -104,3 +118,19 @@ builds and public N0 require network access. Cold builds can be lengthy.
 CI runs the same verifier on Linux from a fresh checkout. Physical mobile/iOS,
 real network changes, backup/uninstall storage observations, controlled authenticated
 relay testing, SSE and WebSockets remain separate gates.
+
+### Chromium internal-CA regression — 2026-10-25
+
+The first PR #15 deployment run passed all three plain-HTTP Compose cases and the
+Firefox/WebKit HTTPS cases, but Chromium timed out before login. A minimal
+self-signed HTTPS probe reproduced a service-worker registration `SecurityError`
+with context-only `ignoreHTTPSErrors`; the Chromium launch override above allowed
+registration and worker fetches to complete.
+
+The fix passes `npm run check` (17 API and 31 browser unit/controller/configuration
+tests). Configuration regressions verify that only the exact TLS-test opt-in adds
+the Chromium argument; ordinary launches and Firefox/WebKit launch arguments are
+unchanged. The actual Chromium `deployment.spec.ts` also passes with the updated
+configuration, a self-signed Node HTTPS static server, the production CSP and a real
+published beta.1 Locho host. This is not Docker/Caddy acceptance; the full Compose/
+Caddy workflow must pass in CI after the fix is pushed.

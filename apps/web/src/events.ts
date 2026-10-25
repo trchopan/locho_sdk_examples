@@ -99,7 +99,7 @@ export class NoteEventWatch {
   private first!: () => void;
   constructor(
     private transport: EventTransport,
-    private token: string,
+    private token: string | undefined,
     private callbacks: {
       validate: () => Promise<void>;
       refresh: () => void;
@@ -135,7 +135,7 @@ export class NoteEventWatch {
         if (retry) await this.callbacks.validate();
         if (this.abort.signal.aborted) break;
         const response = await this.transport.fetchStream('/api/events', {
-          headers: { Authorization: `Bearer ${this.token}` },
+          headers: this.token ? { Authorization: `Bearer ${this.token}` } : {},
           signal: this.abort.signal,
           setupTimeoutMs: 15000,
           idleTimeoutMs: 75000,

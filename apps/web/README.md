@@ -1,6 +1,7 @@
 # Browser notes application
 
-React/TypeScript application with opt-in remembered sessions consuming the published `locho_web` SDK,
+React/TypeScript application demonstrating service-worker cookie sessions and optional
+bearer/remembered sessions. It consumes an installed `locho_web` package,
 not repository source or generated WASM internals. Uses the canonical API v1 in
 `../../contracts`; no separate backend implementation.
 
@@ -25,12 +26,38 @@ from the root README. Ticket input and password fields clear after submission.
 The host must support ticket v1 (Locho PR #91 or later). The app validates health
 identity/version before login. A peer connection alone is not API readiness.
 
-SDK pin: [`locho_web` 0.1.0-beta.1](https://www.npmjs.com/package/locho_web/v/0.1.0-beta.1).
-`package-lock.json` pins its registry URL and SHA-512 integrity. No `vendor/`,
+SDK pin: [`locho_web` 0.1.0-beta.3](https://www.npmjs.com/package/locho_web/v/0.1.0-beta.3),
+including the metadata APIs. `package-lock.json` pins its registry URL and SHA-512 integrity. No `vendor/`,
 GitHub credentials, Rust compiler or SDK build scripts are needed for the browser
 application. Upgrade the exact dependency, lockfile and compatibility record together.
 
-## Application behavior
+`npm run dev:web` builds both the page and worker, then serves production assets at
+`http://127.0.0.1:5173`. Rerun it after source edits. This deliberately avoids a
+development-only worker path. HTTPS (or trusted localhost) is required.
+
+## Cookie sessions (default)
+
+Choose **Cookie session (service worker)** or visit `/?auth=cookie`. Pair, log in,
+and use the same notes CRUD/live-update UI. The worker owns the Locho client and
+cookie; the page receives user/expiry and sanitized JSON/stream responses only.
+There is no remember option, browser-cookie-jar update or automatic credential
+restore. Explicit disconnect clears authentication. Reconnect retains a surviving
+worker's pairing but requires login. Fresh loads and worker loss require pairing.
+
+Switching tickets, including the same service's replacement ticket, clears cookie
+authentication. Tabs have independent worker owners and sessions. Logout attempts
+server revocation and always removes local auth; offline revocation is unconfirmed.
+The worker handles only reserved gateway requests, never arbitrary URLs/HTML.
+Same-origin scripts remain trusted; this is not native HttpOnly/XSS isolation.
+
+See [architecture, security and acceptance](../../../docs/cookie-sessions.md).
+
+## Bearer application behavior (explicit `/?auth=bearer`)
+
+Select **Bearer session** to use the existing flow below. Existing saved bearer
+credentials are neither loaded nor migrated in cookie mode. Switching modes closes
+the active transport; saved bearer credentials remain until explicitly forgotten in
+bearer mode. This is intentional, not a promise that switching mode erases storage.
 
 - Remember disabled: ticket/token remain in memory only; fresh loads start unpaired.
   Remember enabled: an IndexedDB v1 record stores ticket and optional backend auth,
@@ -74,7 +101,8 @@ application. Upgrade the exact dependency, lockfile and compatibility record tog
 
 ## Live note updates
 
-The SDK streaming API carries bearer-authenticated `/api/events`. One owned event
+The SDK streaming API carries bearer-authenticated `/api/events`, or worker-managed
+cookie-authenticated `/browser/api/events`. One owned event
 watch per authenticated foreground session subscribes before the canonical list
 refresh. Same-user changes in other tabs/devices invalidate the list; notes are
 reloaded from the API. Editor drafts and unknown-write messages survive background
@@ -99,7 +127,13 @@ pageshow restores only surviving connection intent. Actual BFCache remains unver
 
 ## Verification and deployment
 
-The extended suite now passes 27 cases including host restart, stopped upstream,
+Current acceptance status is in [cookie-session acceptance](../../../docs/cookie-sessions.md):
+published beta.3 passes the full local matrix (55 passed, five expected skips),
+including the previously failing Firefox restore/re-pair journeys. The earlier
+candidate failures are retained as historical evidence, not current beta.3 failures.
+Compose/HTTPS and mobile interoperability still require separate acceptance.
+
+The earlier bearer suite passed 27 cases including host restart, stopped upstream,
 committed-but-lost POST/PATCH/DELETE responses with no replay, and a new page owner
 restoring a remembered session. See [JSON failure acceptance](../../../docs/json-acceptance.md)
 in the repository root (`docs/json-acceptance.md`) for reproduction and limitations.
