@@ -10,5 +10,6 @@
     "skipLibCheck": true,
     "esModuleInterop": true
   },
-  "include": ["src", "test"]
+  "include": ["src", "test", "e2e", "vite*.ts"],
+  "exclude": ["src/notes-worker.ts"]
 }

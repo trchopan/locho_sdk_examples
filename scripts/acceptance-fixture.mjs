@@ -54,7 +54,7 @@ export async function acceptanceFixture(binary, { eventsTickMs = 100 } = {}) {
       outgoing.on('finish', () => console.log('[boundary] health response finished'));
       outgoing.on('close', () => console.log('[boundary] health connection closed'));
     }
-    if (incoming.url === '/api/events') {
+    if (['/api/events', '/browser/api/events'].includes(incoming.url)) {
       if (eventsPaused) {
         outgoing.writeHead(503).end();
         return;
@@ -63,7 +63,7 @@ export async function acceptanceFixture(binary, { eventsTickMs = 100 } = {}) {
       outgoing.once('close', () => eventResponses.delete(outgoing));
     }
     const mutation =
-      incoming.url.startsWith('/api/notes') &&
+      (incoming.url.startsWith('/api/notes') || incoming.url.startsWith('/browser/api/notes')) &&
       ['POST', 'PATCH', 'DELETE'].includes(incoming.method);
     if (mutation) mutations++;
     const loseResponse = mutation && interrupt === incoming.method;

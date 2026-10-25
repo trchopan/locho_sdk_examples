@@ -32,6 +32,7 @@ export interface Pairing {
   label: string;
   connect(signal: AbortSignal): Promise<Transport>;
   export?(): string;
+  forget?(): Promise<void>;
 }
 export type Auth = { token: string; expiresAt: string; user: User };
 export type State = {
@@ -71,7 +72,7 @@ export class Session {
   state = initial();
   private listeners = new Set<() => void>();
   private pairing?: Pairing;
-  private auth?: Auth;
+  private auth?: Omit<Auth, 'token'> & { token?: string };
   private client?: Transport;
   private generation = 0;
   private cancel = new AbortController();
@@ -93,6 +94,7 @@ export class Session {
     private parse: (value: string) => Promise<Pairing>,
     private store?: CredentialStore,
     private eventOptions: EventOptions = {},
+    readonly mode: 'bearer' | 'cookie' = 'bearer',
   ) {}
   subscribe = (listener: () => void) => {
     this.listeners.add(listener);
@@ -199,6 +201,7 @@ export class Session {
     });
   }
   private persist(): Promise<void> {
+    if (this.mode === 'cookie') return Promise.resolve();
     const revision = ++this.storageRevision;
     let record: SavedSession | undefined;
     try {
@@ -208,7 +211,9 @@ export class Session {
           version: 1,
           key: this.pairing.key,
           ticket: this.pairing.export(),
-          ...(this.auth ? { auth: structuredClone(this.auth) } : {}),
+          ...(this.auth?.token
+            ? { auth: structuredClone({ ...this.auth, token: this.auth.token }) }
+            : {}),
         };
       }
     } catch {
@@ -238,6 +243,7 @@ export class Session {
     return this.persistence;
   }
   async setRemember(value: boolean) {
+    if (this.mode === 'cookie') return;
     this.remember = value;
     this.update({ remember: value });
     await this.persist();
@@ -248,7 +254,7 @@ export class Session {
     return restoring;
   }
   private async restoreSaved() {
-    if (!this.store) return;
+    if (this.mode === 'cookie' || !this.store) return;
     const generation = this.generation,
       revision = this.storageRevision;
     this.update({ storageBusy: true });
@@ -283,12 +289,16 @@ export class Session {
   suspend() {
     this.suspended = true;
     this.invalidate();
+    if (this.mode === 'cookie') this.auth = undefined;
     this.update({
       phase: this.pairing ? 'disconnected' : 'unpaired',
       busy: false,
       notes: [],
       user: undefined,
-      message: 'Page suspended. Credentials retained according to remember choice.',
+      message:
+        this.mode === 'cookie'
+          ? 'Page suspended. Cookie session cleared; reconnect to log in.'
+          : 'Page suspended. Credentials retained according to remember choice.',
     });
   }
   async resume() {
@@ -300,6 +310,7 @@ export class Session {
     const state = status.state;
     if (state === 'reconnecting' || state === 'connecting') {
       this.recovering = true;
+      if (this.mode === 'cookie') this.stopEvents();
       this.update({
         phase: 'disconnected',
         notes: [],
@@ -308,11 +319,29 @@ export class Session {
       });
     } else if (this.recovering && state === 'connected' && !this.state.busy) {
       this.recovering = false;
-      await this.reconnect(); // Fresh health/me validation, never an old mutation.
+      if (this.mode === 'cookie') {
+        await this.action(async (g) => {
+          const health = await this.call('/health', g, false);
+          if (health?.service !== 'locho-notes' || health?.apiVersion !== 1)
+            throw new Error('Wrong API');
+          if (this.auth) {
+            await this.call('/api/me', g);
+            await this.startEvents(g);
+            if (this.auth) await this.load(g);
+          }
+          this.current(g);
+          this.update({ phase: this.auth ? 'notes' : 'login', user: this.auth?.user });
+        });
+      } else await this.reconnect(); // Fresh health/me validation, never an old mutation.
     } else if (state === 'failed' || state === 'closed') {
       this.recovering = false;
       this.disconnect();
-      this.update({ message: 'Transport stopped. Credentials retained; reconnect explicitly.' });
+      this.update({
+        message:
+          this.mode === 'cookie'
+            ? 'Transport stopped. Cookie session cleared; reconnect explicitly.'
+            : 'Transport stopped. Credentials retained; reconnect explicitly.',
+      });
     }
   }
   async pair(text: string) {
@@ -324,9 +353,15 @@ export class Session {
     this.update({ phase: 'connecting', busy: true, notes: [], user: undefined, message: '' });
     let client: Transport | undefined;
     try {
-      const pairing = await parse();
+      await this.teardown;
       this.current(generation);
-      if (this.pairing?.key !== pairing.key) this.auth = undefined;
+      const pairing = await parse();
+      if (generation !== this.generation) {
+        await pairing.forget?.();
+        return;
+      }
+      this.current(generation);
+      if (this.mode === 'cookie' || this.pairing?.key !== pairing.key) this.auth = undefined;
       this.pairing = pairing;
       this.update({ label: pairing.label });
       await this.persist();
@@ -399,12 +434,16 @@ export class Session {
     this.desired = false;
     this.recovering = false;
     this.invalidate();
+    if (this.mode === 'cookie') this.auth = undefined;
     this.update({
       phase: this.pairing ? 'disconnected' : 'unpaired',
       busy: false,
       notes: [],
       user: undefined,
-      message: 'Disconnected. Credentials retained according to remember choice.',
+      message:
+        this.mode === 'cookie'
+          ? 'Disconnected. Cookie session cleared; reconnect to log in.'
+          : 'Disconnected. Credentials retained according to remember choice.',
     });
   }
   async forget() {
@@ -412,6 +451,7 @@ export class Session {
     this.remember = false;
     this.recovering = false;
     this.invalidate();
+    const pairing = this.pairing;
     this.pairing = undefined;
     this.auth = undefined;
     this.state = initial();
@@ -419,6 +459,13 @@ export class Session {
       listener();
     });
     await this.persist();
+    await this.teardown;
+    await pairing?.forget?.();
+  }
+  workerReset() {
+    if (this.mode !== 'cookie') return;
+    void this.forget();
+    this.update({ message: 'Service-worker session lost. Pair and log in again.' });
   }
   private async call(
     path: string,
@@ -429,13 +476,13 @@ export class Session {
   ) {
     this.current(generation);
     if (!this.client) throw new Error('Disconnected');
-    const token = authenticated ? this.auth?.token : undefined;
+    const auth = authenticated ? this.auth : undefined;
     const current = () => {
       this.current(generation);
-      if (authenticated && token !== this.auth?.token) throw new Obsolete();
+      if (authenticated && auth !== this.auth) throw new Obsolete();
     };
     const headers: Record<string, string> = {};
-    if (authenticated && this.auth) headers.Authorization = `Bearer ${this.auth.token}`;
+    if (authenticated && this.auth?.token) headers.Authorization = `Bearer ${this.auth.token}`;
     if (body !== undefined) headers['Content-Type'] = 'application/json';
     const response = await this.client.fetch(path, {
       method,
@@ -486,7 +533,8 @@ export class Session {
     return this.action(async (g) => {
       const data = await this.call('/auth/login', g, false, 'POST', { email, password });
       if (
-        typeof data?.token !== 'string' ||
+        (this.mode === 'bearer' && typeof data?.token !== 'string') ||
+        (this.mode === 'cookie' && data?.token !== undefined) ||
         typeof data.expiresAt !== 'string' ||
         typeof data.user?.email !== 'string'
       )
@@ -574,13 +622,13 @@ export class Session {
     });
     const saving = this.persist();
     let revoked = false;
-    if (client && token) {
+    if (client && (token || this.mode === 'cookie')) {
       try {
         revoked =
           (
             await client.fetch('/auth/logout', {
               method: 'POST',
-              headers: { Authorization: `Bearer ${token}` },
+              headers: token ? { Authorization: `Bearer ${token}` } : {},
               timeoutMs: 15000,
             })
           ).status === 204;

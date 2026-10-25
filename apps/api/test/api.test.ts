@@ -305,6 +305,15 @@ test('logs/errors never expose passwords, bearer tokens or request URLs', async 
   t.after(() => f.app.close());
   const token = await f.login();
   await f.app.inject({ url: '/api/me?ticket=private-ticket', headers: auth(token) });
+  const cookieLogin = await f.app.inject({
+    method: 'POST',
+    url: '/browser/auth/login',
+    headers: { 'x-locho-session-mode': 'cookie' },
+    payload: { email: f.alice.email, password: ' alice-password ' },
+  });
+  const cookie = (cookieLogin.headers['set-cookie'] as string).split(';')[0] ?? '';
+  const cookieToken = cookie.split('=')[1] ?? '';
+  assert.equal(cookieToken.length, 43);
   await f.app.inject({
     method: 'POST',
     url: '/auth/login',
@@ -313,6 +322,17 @@ test('logs/errors never expose passwords, bearer tokens or request URLs', async 
   // Force a database error to prove the generic failure path is also sanitized.
   f.db.exec('DROP TABLE notes');
   const failure = await f.app.inject({ url: '/api/notes', headers: auth(token) });
+  const cookieFailure = await f.app.inject({
+    url: '/browser/api/notes',
+    headers: { 'x-locho-session-mode': 'cookie', cookie },
+  });
+  assert.equal(cookieFailure.statusCode, 500);
+  assert.equal(logs.includes(cookieToken), false, 'cookie credential leaked to logs');
+  assert.equal(
+    cookieFailure.body.includes(cookieToken),
+    false,
+    'cookie credential leaked to error body',
+  );
   assert.equal(failure.statusCode, 500);
   conforms('ApiError', failure.json());
   for (const value of [

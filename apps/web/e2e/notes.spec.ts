@@ -4,7 +4,7 @@ import { enterTicket } from './support';
 type SavedRecord = Record<string, unknown>;
 
 async function pair(page: Page) {
-  await page.goto('/');
+  await page.goto('/?auth=bearer');
   await enterTicket(page);
   await page.getByRole('button', { name: 'Pair', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Login' })).toBeVisible({ timeout: 35000 });
@@ -194,7 +194,7 @@ test('packaged SDK pairing login CRUD isolation reconnect logout and forget', as
 });
 
 test('invalid ticket and failed login remain safe', async ({ page }) => {
-  await page.goto('/');
+  await page.goto('/?auth=bearer');
   await page.getByLabel('Attachment ticket').fill('invalid-sensitive-ticket');
   await page.getByRole('button', { name: 'Pair', exact: true }).click();
   await expect(page.getByRole('alert')).toHaveText(

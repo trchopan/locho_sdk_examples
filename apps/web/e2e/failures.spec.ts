@@ -7,7 +7,7 @@ async function command(request: APIRequestContext, action: string) {
   return response.json();
 }
 async function login(page: Page) {
-  await page.goto('/');
+  await page.goto('/?auth=bearer');
   await enterTicket(page);
   await page.getByRole('button', { name: 'Pair', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Login' })).toBeVisible({ timeout: 35000 });
@@ -105,7 +105,7 @@ test('new page owner restores saved session after old page closes', async ({ pag
   await expect(page.getByText('Updating saved credentials…', { exact: true })).toHaveCount(0);
   await page.close();
   const next = await context.newPage();
-  await next.goto('/');
+  await next.goto('/?auth=bearer');
   await expect(next.getByRole('heading', { name: 'Notes for alice@example.test' })).toBeVisible({
     timeout: 35000,
   });

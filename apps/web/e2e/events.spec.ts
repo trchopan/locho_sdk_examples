@@ -5,7 +5,7 @@ async function command(request: APIRequestContext, action = 'status') {
   return (await request.post(`${process.env.LOCHO_BROWSER_CONTROL}/${action}`)).json();
 }
 async function login(page: Page, user = 'alice') {
-  await page.goto('/');
+  await page.goto('/?auth=bearer');
   await enterTicket(page);
   await page.getByRole('button', { name: 'Pair', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Login' })).toBeVisible({ timeout: 35000 });

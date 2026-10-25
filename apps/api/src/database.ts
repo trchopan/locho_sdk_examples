@@ -8,7 +8,7 @@ export function openDatabase(path: string): DatabaseSync {
   db.exec('PRAGMA foreign_keys = ON; PRAGMA journal_mode = WAL; PRAGMA busy_timeout = 5000;');
   const version = (db.prepare('PRAGMA user_version').get() as { user_version: number })
     .user_version;
-  if (version > 1) {
+  if (version > 2) {
     db.close();
     throw new Error('Unsupported database schema version');
   }
@@ -38,6 +38,15 @@ export function openDatabase(path: string): DatabaseSync {
       );
       CREATE INDEX notes_user_updated ON notes(user_id, updated_at DESC, id ASC);
       PRAGMA user_version = 1;
+      COMMIT;
+    `);
+  }
+  if (version < 2) {
+    db.exec(`
+      BEGIN IMMEDIATE;
+      ALTER TABLE sessions ADD COLUMN auth_mode TEXT NOT NULL DEFAULT 'bearer'
+        CHECK (auth_mode IN ('bearer', 'cookie'));
+      PRAGMA user_version = 2;
       COMMIT;
     `);
   }

@@ -9,17 +9,19 @@ OS package repositories are not immutable digests; these Docker builds are repea
 instructions, not hermetic/reproducible-bit guarantees. Record built image IDs for
 your deployment and review base-image updates deliberately.
 
-Install the Node workspaces directly from npm:
+Install the Node workspaces with the committed lockfile:
 
 ```sh
 npm ci
 npm run check
 ```
 
-The browser pins `locho_web` 0.1.0-beta.1 and the root npm lockfile records its
-registry URL/SHA-512 integrity. Flutter pins `locho_flutter` 0.1.0-beta.1 from pub.dev;
+The browser pins published `locho_web` 0.1.0-beta.3 from npm; the root lockfile records
+its registry URL and SHA-512 integrity. No local SDK archive is required by installation
+or the API Docker build.
+Flutter pins `locho_flutter` 0.1.0-beta.1 from pub.dev;
 run `flutter pub get` in `apps/flutter` using its committed hosted-package lockfile.
-No SDK archives, vendor extraction or GitHub credentials are needed. Package-manager
+No archive bootstrap, vendor extraction or GitHub credentials are needed. Package-manager
 caches can accelerate repeated installs; cold installs require registry access.
 Flutter's SDK bundles Locho Rust sources but still needs the documented Rust/native
 build toolchains. See compatibility.md for exact versions/checksums and acceptance.
@@ -73,11 +75,16 @@ volumes. API/Locho can run on a different private machine; the website only serv
 static assets. Never copy ticket or token data into the website image/configuration.
 
 The provided Caddyfile sets WASM MIME, immutable caching for hashed assets, no-store
-for HTML, no-referrer, nosniff and CSP. CSP allows WebAssembly compilation and N0
+for HTML/worker, no-referrer, nosniff and CSP. CSP explicitly permits same-origin
+workers, WebAssembly compilation and N0
 HTTPS/WSS endpoints; applications choosing custom discovery/relays must add only
 their required origins. No blanket TLS/certificate bypass is configured for users.
-This configuration hosts at `/`; for a subpath set Vite `base` and adjust Caddy
-routing together. General package `/sdk/` support was verified separately in Locho.
+This configuration hosts at `/`. For a subpath set `VITE_PUBLIC_BASE=/your-path/`
+for both build steps and adjust the Caddy root/routing, worker path and gateway
+fallback together; application subpath deployment remains an acceptance gate.
+The worker has a stable URL, no-store/updateViaCache:none and no skipWaiting.
+An update waits for old clients to close; it must not replace active sessions
+silently. Gateway requests that reach Caddy return 503/reset, never backend data.
 
 ## Automated acceptance and evidence
 
@@ -94,7 +101,8 @@ on Chromium, Firefox and WebKit. It repeats the journey against a Caddy static H
 container with real CSP, secure-context, MIME/cache/header assertions. Finally it
 deletes only its own project's volumes and temporary credential file.
 
-Local macOS Docker ARM64 acceptance passed both three-browser journeys. The HTTPS
+Historical bearer-mode macOS Docker ARM64 acceptance passed both three-browser journeys.
+Cookie-mode deployment acceptance is tracked separately in cookie-sessions.md. The HTTPS
 test uses Caddy's internal CA, with `ignoreHTTPSErrors` enabled **only for this
 test invocation**; production uses public certificate verification. Thus CSP/HTTPS
 transport/asset checks are demonstrated, but public DNS/ACME trust and actual public

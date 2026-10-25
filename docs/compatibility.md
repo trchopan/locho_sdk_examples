@@ -1,5 +1,52 @@
 # Compatibility baseline
 
+## Browser registry beta.3 alignment — 2026-10-25
+
+The browser pins published `locho_web@0.1.0-beta.3` from npm, replacing the temporary
+metadata candidate. Its embedded build manifest records clean source commit
+`0c8ad57cc91af30144138bd324aeca86604f48dd`, wire protocol 3 and ticket format 1.
+The archive's SHA-256 is
+`1dcbee155e6c59b8561c3fda3b3e20a15123ef9cb1808fb566ed6ceeb537bc65`;
+the npm lockfile records its registry URL and SHA-512 integrity.
+
+The release includes public metadata APIs, relay-URL canonicalization (#124), shared
+peer/stream lifecycle hardening and bounded read-only discovery retries. Its changelog
+explicitly does not claim every public-N0 timeout is resolved. No host upgrade is
+required by the metadata APIs. Flutter and CI/Compose host pins remain unchanged.
+Database schema is v2; OpenAPI is 1.2.0,
+with additive cookie routes and existing API identity `apiVersion: 1` retained.
+
+The browser-only migration is locally complete with this explicit compatibility set:
+
+| Component | Pin | First-sequence scope |
+| --- | --- | --- |
+| Browser SDK | `locho_web@0.1.0-beta.3` from npm | Upgraded and verified |
+| Host CLI | `1.3.0-beta.1`, `3786da3127338b2530e0cd8cea8ef23bc6d55dfd` | Unchanged; used for browser/TCP acceptance |
+| Flutter SDK | `locho_flutter@0.1.0-beta.1` from pub.dev | Unchanged; unit regression checks passed |
+
+Host/Flutter upgrades are a separate, not-yet-started sequence. Flutter unit checks
+do not establish cookie-browser/native runtime interoperability.
+
+Current cookie-mode verification and remaining gates are recorded in
+[cookie sessions](cookie-sessions.md). Earlier registry acceptance below is historical.
+
+Local beta.3 verification passes clean installation, `npm run check` (17 API and 29
+browser unit/controller tests), the four prior Firefox failures in a focused run,
+the full browser matrix (55 passed / five expected skips), direct TCP smoke and all
+28 Flutter unit tests. Runtime checks used the published macOS ARM64 beta.1 CLI at
+the same clean `3786da3` revision pinned by CI/Compose; no host upgrade was needed.
+Docker is unavailable and no Android device/emulator is connected, so those runtime
+gates remain unverified. A green local matrix does not establish that every public-N0
+timeout is resolved or replace hosted Linux/physical-device evidence.
+
+### Historical metadata candidate — 2026-10-24
+
+The prior development package came from clean commit
+`977ee5d0208f5efdb8f2d7f9210890de1ca03155`, with archive SHA-256
+`bfc8520be50c79037ed8d33e79ab965f27e6d41ed5df70b8137ed4cf6fa525bc`.
+It was not the published npm beta.2. Its local archive and Docker copy step have
+been removed; historical test results remain in the cookie-session guide.
+
 ## Registry beta migration — 2026-10-17
 
 Both apps now pin published `0.1.0-beta.1` SDKs. Install with `npm ci` at the
