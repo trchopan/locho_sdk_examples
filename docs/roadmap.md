@@ -9,7 +9,7 @@ browser namespace; schema v2 separates authentication transports. See
 The browser now pins published `locho_web@0.1.0-beta.3`; the temporary package archive
 and Docker copy step are removed. Local registry acceptance passes all 55 active
 Chromium/Firefox/WebKit cases with five expected skips, including the four prior
-Firefox restore/re-pair failures. No test retries or application-write replay were
+Firefox restore/re-pair failures. No whole-test retries or application-write replay were
 enabled. Compose/HTTPS, hosted CI and mobile interoperability remain separate gates.
 Earlier milestones below describe the previous registry baseline.
 

@@ -1,9 +1,5 @@
-import { test, expect, type Page, type APIRequestContext } from '@playwright/test';
-import { enterTicket } from './support';
-
-async function command(request: APIRequestContext, action = 'status') {
-  return (await request.post(`${process.env.LOCHO_BROWSER_CONTROL}/${action}`)).json();
-}
+import { test, expect, type Page } from '@playwright/test';
+import { enterTicket, fixtureCommand as command } from './support';
 async function login(page: Page, user = 'alice') {
   await page.goto('/?auth=bearer');
   await enterTicket(page);

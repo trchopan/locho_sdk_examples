@@ -1,5 +1,5 @@
-import { test, expect, type Page, type APIRequestContext } from '@playwright/test';
-import { enterTicket } from './support';
+import { test, expect, type Page } from '@playwright/test';
+import { enterTicket, fixtureCommand as command } from './support';
 
 async function pair(page: Page, mode = 'cookie') {
   await page.goto(`/?auth=${mode}`);
@@ -27,11 +27,6 @@ async function login(page: Page, user = 'alice') {
     timeout: 20000,
   });
   await expect(page.getByTestId('live-status')).toHaveText('Live updates: live');
-}
-async function command(request: APIRequestContext, action: string) {
-  const response = await request.post(`${process.env.LOCHO_BROWSER_CONTROL}/${action}`);
-  expect(response.ok()).toBe(true);
-  return response.json();
 }
 test.beforeEach(async ({ request }) => {
   // The fixture is shared across engines/legacy tests. Revoke prior disposable

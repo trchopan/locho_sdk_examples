@@ -155,6 +155,11 @@ and immediate upstream transport reclamation on eviction is not claimed.
 Cookie tests also revoke prior disposable fixture sessions before each journey,
 isolating cleanup counters from earlier legacy tests and browser contexts. This
 control exists only in the local acceptance fixture, never in user deployments.
+The shared Playwright fixture-control helper permits one network retry only for
+the side-effect-free `status` snapshot (the fixture uses POST even for this read).
+Playwright retries only `ECONNRESET`, not HTTP errors. All state-changing fixture
+commands explicitly use zero retries. Persistent status failures and nonzero stream
+counts still fail cleanup; application requests and whole browser tests are not retried.
 
 The Flutter cross-browser harness now defaults to cookie mode; set
 `LOCHO_CROSS_BROWSER_AUTH=bearer` to run the previous comparison journey. Changing
@@ -206,6 +211,24 @@ Its archive has been removed; this identity is retained only as historical evide
   device/emulator connected; cookie-browser/native interoperability remains open.
 - The existing moderate `fast-uri` transitive npm advisory remains; no unrelated
   dependency upgrades were included in this alignment.
+
+### Fixture status query regression — 2026-10-25
+
+After the Chromium internal-CA fix, CI deployment and both Flutter jobs passed.
+The browser job at `e136ffc` reported 54 passed / one failed / five skipped: the
+failure was an `ECONNRESET` reading the loopback fixture's `/status` during Firefox
+cleanup, not an application login/CRUD/logout failure. The exact socket-reset
+trigger was not captured, so it is not attributed to a proven keep-alive defect.
+
+The status-only retry policy above is tested using real local HTTP connections that
+deliberately reset sockets. Regressions require recovery from one status reset,
+failure after two resets, no replay of any fault/revocation/host command, no retry
+of HTTP 500, and preservation of nonzero active-stream counts. This does not enable
+whole-test retries or change Locho/application mutation behavior.
+
+Local verification of this hardening passes `npm run check` (17 API and 35 browser
+unit/controller/configuration tests) and the full real-host browser matrix: 55 passed,
+five expected skips (9.9 minutes), using the same published beta.1 host baseline.
 
 ### Historical candidate execution record — 2026-10-24
 
