@@ -103,8 +103,14 @@ deletes only its own project's volumes and temporary credential file.
 
 Historical bearer-mode macOS Docker ARM64 acceptance passed both three-browser journeys.
 Cookie-mode deployment acceptance is tracked separately in cookie-sessions.md. The HTTPS
-test uses Caddy's internal CA, with `ignoreHTTPSErrors` enabled **only for this
-test invocation**; production uses public certificate verification. Thus CSP/HTTPS
+test uses Caddy's internal CA, with `LOCHO_LOCAL_TLS_TEST=1` enabling
+`ignoreHTTPSErrors` **only for this test invocation**. Chromium additionally needs
+a test-only `--ignore-certificate-errors` launch argument because its service-worker
+script loader does not honor the context-level setting. That browser-process
+override is confined to the disposable TLS test; it is not added to ordinary browser
+launches, Firefox/WebKit launch options, or production application/Caddy configuration.
+Never enable this test flag for real credentials or production trust acceptance.
+Production uses public certificate verification. Thus CSP/HTTPS
 transport/asset checks are demonstrated, but public DNS/ACME trust and actual public
 hosting remain operator/device acceptance, not claimed as completed. Container
 builds and public N0 require network access. Cold builds can be lengthy.
@@ -112,3 +118,19 @@ builds and public N0 require network access. Cold builds can be lengthy.
 CI runs the same verifier on Linux from a fresh checkout. Physical mobile/iOS,
 real network changes, backup/uninstall storage observations, controlled authenticated
 relay testing, SSE and WebSockets remain separate gates.
+
+### Chromium internal-CA regression — 2026-10-25
+
+The first PR #15 deployment run passed all three plain-HTTP Compose cases and the
+Firefox/WebKit HTTPS cases, but Chromium timed out before login. A minimal
+self-signed HTTPS probe reproduced a service-worker registration `SecurityError`
+with context-only `ignoreHTTPSErrors`; the Chromium launch override above allowed
+registration and worker fetches to complete.
+
+The fix passes `npm run check` (17 API and 31 browser unit/controller/configuration
+tests). Configuration regressions verify that only the exact TLS-test opt-in adds
+the Chromium argument; ordinary launches and Firefox/WebKit launch arguments are
+unchanged. The actual Chromium `deployment.spec.ts` also passes with the updated
+configuration, a self-signed Node HTTPS static server, the production CSP and a real
+published beta.1 Locho host. This is not Docker/Caddy acceptance; the full Compose/
+Caddy workflow must pass in CI after the fix is pushed.
