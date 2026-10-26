@@ -21,7 +21,7 @@ jobs:
       - uses: actions/checkout@v7
         with:
           repository: trchopan/locho
-          ref: 3786da3127338b2530e0cd8cea8ef23bc6d55dfd
+          ref: 0c8ad57cc91af30144138bd324aeca86604f48dd
           path: target/locho
           persist-credentials: false
       - uses: dtolnay/rust-toolchain@1.96.0
@@ -31,6 +31,18 @@ jobs:
         env:
           LOCHO_BINARY: ${{ github.workspace }}/target/locho/target/release/locho
       - run: npx playwright install --with-deps chromium firefox webkit
+      - uses: actions/checkout@v7
+        with:
+          repository: trchopan/locho
+          ref: 3786da3127338b2530e0cd8cea8ef23bc6d55dfd
+          path: target/locho-previous
+          persist-credentials: false
+      - run: cargo build --locked --release --bin locho
+        working-directory: target/locho-previous
+      - run: npm run smoke:host-upgrade
+        env:
+          LOCHO_BINARY: ${{ github.workspace }}/target/locho/target/release/locho
+          LOCHO_PREVIOUS_BINARY: ${{ github.workspace }}/target/locho-previous/target/release/locho
       - run: npm run test:browser
         env:
           LOCHO_BINARY: ${{ github.workspace }}/target/locho/target/release/locho
