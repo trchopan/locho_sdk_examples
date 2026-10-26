@@ -4,7 +4,7 @@
 
 Use Node 24.18.0, npm 11.16.0 and Docker Compose v2+ with support for health-based
 dependencies and `up --wait`. Images are version-tagged; Locho source is additionally
-pinned to full Git revision `3786da3127338b2530e0cd8cea8ef23bc6d55dfd` (`1.3.0-beta.1`). Image tags and
+pinned to full Git revision `0c8ad57cc91af30144138bd324aeca86604f48dd` (`1.3.0-beta.3`). Image tags and
 OS package repositories are not immutable digests; these Docker builds are repeatable
 instructions, not hermetic/reproducible-bit guarantees. Record built image IDs for
 your deployment and review base-image updates deliberately.
@@ -19,7 +19,7 @@ npm run check
 The browser pins published `locho_web` 0.1.0-beta.3 from npm; the root lockfile records
 its registry URL and SHA-512 integrity. No local SDK archive is required by installation
 or the API Docker build.
-Flutter pins `locho_flutter` 0.1.0-beta.1 from pub.dev;
+Flutter pins `locho_flutter` 0.1.0-beta.3 from pub.dev;
 run `flutter pub get` in `apps/flutter` using its committed hosted-package lockfile.
 No archive bootstrap, vendor extraction or GitHub credentials are needed. Package-manager
 caches can accelerate repeated installs; cold installs require registry access.
@@ -118,6 +118,13 @@ builds and public N0 require network access. Cold builds can be lengthy.
 CI runs the same verifier on Linux from a fresh checkout. Physical mobile/iOS,
 real network changes, backup/uninstall storage observations, controlled authenticated
 relay testing, SSE and WebSockets remain separate gates.
+
+PR #15's merged browser-only baseline passed hosted Compose/Caddy HTTPS acceptance
+at merge `45ea7b6dc5c6da4383faa878fa1da9341fcd8ccf` (run
+[40202846954](https://github.com/trchopan/locho_sdk_examples/actions/runs/40202846954)).
+That used host beta.1; the coordinated beta.3 host/Flutter acceptance is recorded
+separately in [native beta.3 acceptance](native-beta3-acceptance.md), not inferred
+from that earlier green deployment.
 
 ### Chromium internal-CA regression — 2026-10-25
 

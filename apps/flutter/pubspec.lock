@@ -283,10 +283,10 @@ packages:
     dependency: "direct main"
     description:
       name: locho_flutter
-      sha256: "40d69471f0a0fe99bf19788eb260e428d30fc1124c4cfdede6bbef6172eb0234"
+      sha256: fcdad92b61204ed6ef3ead00fb5f46ea780a7263ee3f4465226d5ecc05faa735
       url: "https://pub.dev"
     source: hosted
-    version: "0.1.0-beta.1"
+    version: "0.1.0-beta.3"
   logging:
     dependency: transitive
     description:

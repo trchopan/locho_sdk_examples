@@ -89,10 +89,14 @@ SDK Rust sources are required. This is a demonstration, not a background service
 
 ## Setup
 
-SDK pin: [`locho_flutter` 0.1.0-beta.1](https://pub.dev/packages/locho_flutter/versions/0.1.0-beta.1).
+SDK pin: [`locho_flutter` 0.1.0-beta.3](https://pub.dev/packages/locho_flutter/versions/0.1.0-beta.3).
 The committed `pubspec.lock` pins the hosted package and archive checksum. The SDK
 bundles matching Locho Rust core/native sources and generated FRB bindings. Install
 directly from pub.dev; no vendor bootstrap, GitHub login or SDK checkout is required.
+Its clean bundled/native source revision is `0c8ad57cc91af30144138bd324aeca86604f48dd`;
+FRB remains 2.12.0, wire protocol 3 and ticket format 1. See
+[native beta.3 acceptance](../../../docs/native-beta3-acceptance.md) for current results
+and the distinction from older evidence in this document.
 
 From `apps/flutter`:
 
@@ -169,6 +173,18 @@ session recreation, remember-off, saved-token removal, logout and forget. These 
 controller/runtime journeys, not a complete tap-driven UI acceptance suite. Widget
 tests cover the initial credential UI. Public N0 discovery is environment-dependent;
 tests do not claim a particular selected transport path.
+
+Use a disposable emulator for acceptance, especially `--process-restart`, which
+clears only the demo application's storage. The runner checks the selected device
+ABI and builds release acceptance for ARM64 or x86_64 accordingly. It force-stops
+its demo app and removes its reverse-port mapping after a run. It does not change
+your emulator images, host identity or Flutter SDK installation.
+
+The `android-runtime` CI job now executes basic/controller, tap-driven UI, failure,
+cookie-browser event interoperability, release and real process-restart journeys on
+an API 36 x86_64 emulator. Its logs report ABI/API/page size. APKs and dart-define
+files embed disposable tickets and must not be uploaded as artifacts. Android
+ARM64/16 KiB acceptance and physical devices remain separately identified evidence.
 
 Local Android ARM64 16 KiB emulator debug acceptance and ARM64/x86_64 debug/release
 builds pass; autonomous release acceptance passes. iOS build CI is separate from

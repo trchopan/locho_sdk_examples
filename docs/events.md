@@ -1,5 +1,10 @@
 # Authenticated note events — API v1 / OpenAPI 1.2.0
 
+The current [native beta.3 acceptance](native-beta3-acceptance.md) reruns cookie-mode
+browser ↔ bearer-Flutter interoperability on a disposable ARM64/16 KiB emulator,
+including the real 65-second heartbeat interval. Older results below remain historical;
+the new Android x86_64 runtime CI gate is separate from build-only Flutter CI.
+
 Cookie-mode browsers use `/browser/api/events`, with the same framing, publication,
 capacity, expiry and revocation policy described below. Their module worker uses
 `fetchStreamWithMetadata`, processes sensitive metadata internally and forwards the

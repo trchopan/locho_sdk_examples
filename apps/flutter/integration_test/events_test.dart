@@ -117,7 +117,8 @@ void main() {
         await until(() => session.phase == 'login');
         expect(session.notes, isEmpty);
         expect(session.live, 'off');
-        expect(jsonDecode((await storage.read())!)['token'], isNull);
+        // Do not print a surviving credential as an assertion's actual value.
+        expect(jsonDecode((await storage.read())!)['token'] == null, true);
         debugPrint('NOTES_CROSS_PLATFORM_EVENTS_PASS');
       } finally {
         await command('events-resume');

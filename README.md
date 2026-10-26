@@ -6,10 +6,11 @@ repository. `apps/web` now demonstrates **worker-managed cookie sessions** by
 default, with a separately selectable bearer/IndexedDB mode. It consumes
 `locho_web` **0.1.0-beta.3** from npm, including the public metadata APIs; see the
 [cookie-session guide](docs/cookie-sessions.md).
-The local Chromium/Firefox/WebKit matrix passes against this registry release;
-deployment and mobile acceptance remain separate gates.
+The browser-only handoff passed hosted browser and Compose/HTTPS CI. The current
+[native beta.3 alignment](docs/native-beta3-acceptance.md) records the coordinated
+host/Flutter upgrade and distinguishes build, emulator and physical-device evidence.
 `apps/flutter` consumes
-`locho_flutter` **0.1.0-beta.1** from pub.dev for foreground notes and opt-in secure
+`locho_flutter` **0.1.0-beta.3** from pub.dev for foreground notes and opt-in secure
 storage. Both apps support live note updates through the shared API. See
 [Flutter setup](apps/flutter/README.md) and [compatibility](docs/compatibility.md).
 
@@ -26,8 +27,8 @@ npm run seed
 npm run dev:api
 ```
 
-Dependencies install from npm/pub.dev using committed lockfiles. No SDK compilation,
-archive bootstrap or GitHub authentication is required. See
+Dependencies install from npm/pub.dev using committed lockfiles. Browser installation
+requires no SDK compilation, archive bootstrap or GitHub authentication. See
 [browser app setup and acceptance](apps/web/README.md). Flutter uses `flutter pub get`
 from `apps/flutter`; its SDK bundles native Rust sources and requires Rust/platform
 build toolchains.
@@ -60,6 +61,10 @@ tokens or databases are committed. Response fixtures contain dummy values only.
 
 On the machine running the API, use the ordinary Locho host with the TCP definition:
 
+The current host baseline is **Locho CLI 1.3.0-beta.3**, pinned by full release
+revision in CI/Compose. No wire/ticket-format change or new browser requirement is
+introduced by this native alignment. Verify downloads using the release checksums.
+
 ```sh
 locho host --config deploy/locho.toml
 ```
@@ -86,6 +91,16 @@ LOCHO_BINARY=/absolute/path/to/locho npm run smoke:locho
 
 This creates temporary host state, uses a direct loopback path, verifies
 health/login/notes through a real TCP tunnel, and cleans up processes/state.
+
+To verify the existing-ticket upgrade/rollback path with two trusted CLI binaries:
+
+```sh
+LOCHO_PREVIOUS_BINARY=/absolute/path/to/beta.1/locho \
+LOCHO_BINARY=/absolute/path/to/beta.3/locho npm run smoke:host-upgrade
+```
+
+This uses disposable state and a production cookie-mode browser, not your deployed
+host identity. It preserves the original ticket, config and notes across both swaps.
 
 ## Layout and contracts
 

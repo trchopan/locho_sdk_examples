@@ -15,10 +15,16 @@ are trusted and can initiate authorized application operations.
 
 ## Published SDK baseline — 2026-10-25
 
+The coordinated 2026-10-26 native alignment now also pins host CLI 1.3.0-beta.3 and
+Flutter SDK 0.1.0-beta.3. The browser SDK and cookie-handler policy are unchanged.
+See [native beta.3 acceptance](native-beta3-acceptance.md) for current runtime results.
+The original browser-only handoff described below retained host/Flutter beta.1.
+
 The browser pins `locho_web@0.1.0-beta.3` from npm, built from clean commit
 `0c8ad57cc91af30144138bd324aeca86604f48dd`. Both metadata methods and
 `LochoResponseWithMetadata` are present in its public declarations. Wire protocol 3
-and ticket format 1 are unchanged; Flutter and CI/Compose host pins are unchanged.
+and ticket format 1 are unchanged; at that handoff Flutter and CI/Compose host pins
+were unchanged at beta.1.
 The previous local SDK archive is no longer used or included in this checkout.
 
 Archive SHA-256:
@@ -167,11 +173,17 @@ the harness is not new emulator/device evidence; rerun it before claiming accept
 
 Local registry verification is recorded below. Remaining acceptance gates are:
 
-- Hosted CI and Compose/Caddy HTTPS/CSP acceptance; local desktop registry acceptance passes.
-- Cookie-mode Flutter/emulator interoperability evidence.
+- Current native-release CI/Compose and runtime evidence is tracked in native-beta3-acceptance.md.
 - Physical/mobile, public DNS/ACME, actual BFCache and broad real-network transitions.
 - Firefox/WebKit actual worker termination and application subpath deployment.
 - No universal third-party cookie/application compatibility claim.
+
+PR #15's merged baseline passed hosted browser, Compose/Caddy HTTPS and Flutter
+unit/build CI ([browser](https://github.com/trchopan/locho_sdk_examples/actions/runs/40202846912),
+[deployment](https://github.com/trchopan/locho_sdk_examples/actions/runs/40202846954),
+[Flutter builds](https://github.com/trchopan/locho_sdk_examples/actions/runs/40202846911)).
+Its Flutter workflow did not run emulator integration tests; the new runtime job
+and local ARM64 evidence must be assessed independently.
 
 The historical 2026-10-24 SDK candidate came from clean commit
 `977ee5d0208f5efdb8f2d7f9210890de1ca03155`;
