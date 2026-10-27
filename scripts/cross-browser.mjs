@@ -1,55 +1,44 @@
 import { chromium } from '@playwright/test';
 import { createServer } from 'node:http';
-import { spawn } from 'node:child_process';
+import { preview as vitePreview } from 'vite';
 import { fileURLToPath } from 'node:url';
-const root = fileURLToPath(new URL('../', import.meta.url));
 
 /** Disposable production browser peer for native Flutter integration acceptance. */
 export async function crossBrowser(fixture) {
-  const preview = spawn(
-    'npx',
-    [
-      '--no-install',
-      'vite',
-      'preview',
-      'apps/web',
-      '--host',
-      '127.0.0.1',
-      '--port',
-      '4173',
-      '--strictPort',
-    ],
-    { cwd: root, stdio: 'ignore' },
-  );
+  const preview = await vitePreview({
+    root: fileURLToPath(new URL('../apps/web', import.meta.url)),
+    preview: { host: '127.0.0.1', port: 4173, strictPort: true },
+  });
+  const closePreview = async () => {
+    preview.httpServer.closeAllConnections();
+    await new Promise((resolve, reject) =>
+      preview.httpServer.close((error) => (error ? reject(error) : resolve())),
+    );
+  };
   let browser;
   const control = createServer();
   try {
-    let ready = false;
-    for (let i = 0; i < 50; i++) {
-      try {
-        if ((await fetch('http://127.0.0.1:4173')).ok) {
-          ready = true;
-          break;
-        }
-      } catch {}
-      await new Promise((resolve) => setTimeout(resolve, 100));
-    }
-    if (!ready) throw new Error('Cross-browser preview unavailable');
     browser = await chromium.launch();
     const page = await browser.newPage();
     const mode = process.env.LOCHO_CROSS_BROWSER_AUTH ?? 'cookie';
     if (!['cookie', 'bearer'].includes(mode)) throw new Error('Invalid browser auth mode');
-    await page.goto(`http://127.0.0.1:4173/?auth=${mode}`);
-    await page.getByLabel('Attachment ticket').evaluate((element, value) => {
-      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(element, value);
-      element.dispatchEvent(new Event('input', { bubbles: true }));
-    }, fixture.ticket);
-    await page.getByRole('button', { name: 'Pair', exact: true }).click();
-    await page.getByRole('heading', { name: 'Login', exact: true }).waitFor({ timeout: 35000 });
-    await page.getByLabel('Email', { exact: true }).fill('alice@example.test');
-    await page.getByLabel('Password', { exact: true }).fill('alice-local-demo-only');
-    await page.getByRole('button', { name: 'Login', exact: true }).click();
-    await page.getByTestId('live-status').filter({ hasText: 'Live updates: live' }).waitFor();
+    async function pair() {
+      await page.goto(`http://127.0.0.1:4173/?auth=${mode}`);
+      await page.getByLabel('Attachment ticket').evaluate((element, value) => {
+        Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(
+          element,
+          value,
+        );
+        element.dispatchEvent(new Event('input', { bubbles: true }));
+      }, fixture.ticket);
+      await page.getByRole('button', { name: 'Pair', exact: true }).click();
+      await page.getByRole('heading', { name: 'Login', exact: true }).waitFor({ timeout: 35000 });
+      await page.getByLabel('Email', { exact: true }).fill('alice@example.test');
+      await page.getByLabel('Password', { exact: true }).fill('alice-local-demo-only');
+      await page.getByRole('button', { name: 'Login', exact: true }).click();
+      await page.getByTestId('live-status').filter({ hasText: 'Live updates: live' }).waitFor();
+    }
+    await pair();
     const title = `Cross-platform ${Date.now()}`;
     const note = () =>
       page.locator('li').filter({ has: page.getByRole('heading', { name: title, exact: true }) });
@@ -117,16 +106,25 @@ export async function crossBrowser(fixture) {
     await new Promise((resolve) => control.listen(0, '127.0.0.1', resolve));
     return {
       controlUrl: `http://127.0.0.1:${control.address().port}`,
+      pair,
+      forget: () => page.getByRole('button', { name: 'Forget homelab', exact: true }).click(),
+      noteCount: () => page.locator('li').count(),
+      createNote: create,
+      editNote: edit,
       cleanup: async () => {
+        await page
+          .getByRole('button', { name: 'Forget homelab', exact: true })
+          .click()
+          .catch(() => {});
         await browser.close();
         control.closeAllConnections();
         await new Promise((resolve) => control.close(resolve));
-        preview.kill('SIGTERM');
+        await closePreview();
       },
     };
   } catch (error) {
     await browser?.close();
-    preview.kill('SIGTERM');
+    await closePreview();
     control.close();
     throw error;
   }

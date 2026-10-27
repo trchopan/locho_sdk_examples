@@ -42,3 +42,68 @@ jobs:
       - run: flutter config --no-enable-swift-package-manager && flutter build ios --simulator --debug && flutter build ios --release --no-codesign
         if: runner.os == 'macOS'
         working-directory: apps/flutter
+  android-runtime:
+    name: Android runtime and cookie-browser interoperability
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24.18.0'
+          cache: npm
+      - uses: dtolnay/rust-toolchain@1.96.0
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.44.5'
+          channel: stable
+          cache: true
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: 'platform-tools platforms;android-36 build-tools;36.0.0 ndk;28.2.13676358'
+      - run: npm ci && npm run build
+      - run: npx playwright install --with-deps chromium
+      - run: flutter pub get
+        working-directory: apps/flutter
+      - uses: actions/checkout@v7
+        with:
+          repository: trchopan/locho
+          ref: 0c8ad57cc91af30144138bd324aeca86604f48dd
+          path: target/runtime-locho
+          persist-credentials: false
+      - run: cargo build --locked --release --bin locho
+        working-directory: target/runtime-locho
+      - name: Enable emulator acceleration
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Execute native acceptance on Android x86_64
+        uses: reactivecircus/android-emulator-runner@v2
+        env:
+          LOCHO_BINARY: ${{ github.workspace }}/target/runtime-locho/target/release/locho
+          LOCHO_DEVICE: emulator-5554
+          LOCHO_CROSS_BROWSER_AUTH: cookie
+          CARGO_BUILD_JOBS: '2'
+        with:
+          api-level: 36
+          target: google_apis
+          arch: x86_64
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -no-snapshot -camera-back none -camera-front none
+          script: |
+            adb -s emulator-5554 shell getprop ro.product.cpu.abi
+            adb -s emulator-5554 shell getprop ro.build.version.sdk
+            adb -s emulator-5554 shell getconf PAGE_SIZE
+            node scripts/flutter-fixture.mjs
+            node scripts/flutter-fixture.mjs --ui
+            node scripts/flutter-fixture.mjs --failures
+            node scripts/flutter-fixture.mjs --events
+            node scripts/flutter-fixture.mjs --release
+            node scripts/flutter-fixture.mjs --process-restart
+      # APKs and dart-define files embed the disposable ticket. Never upload them,
+      # browser traces, screenshots, videos or raw device logs as CI artifacts.

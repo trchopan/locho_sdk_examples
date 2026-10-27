@@ -21,7 +21,9 @@ const events = process.argv.includes('--events');
 let cross;
 const packageName = 'dev.chop.locho_notes';
 const adb = join(
-  process.env.ANDROID_HOME ?? join(process.env.HOME, 'Library/Android/sdk'),
+  process.env.ANDROID_HOME ??
+    process.env.ANDROID_SDK_ROOT ??
+    join(process.env.HOME, 'Library/Android/sdk'),
   'platform-tools/adb',
 );
 const android = (...args) => exec(adb, ['-s', device, ...args], { timeout: 30000 });
@@ -48,6 +50,11 @@ async function launch() {
   await android('shell', 'am', 'start', '-W', '-n', `${packageName}/.MainActivity`);
 }
 try {
+  const { stdout: state } = await android('get-state');
+  if (state.trim() !== 'device') throw new Error('Android acceptance requires a connected device');
+  const { stdout: abi } = await android('shell', 'getprop', 'ro.product.cpu.abi');
+  const target = { 'arm64-v8a': 'android-arm64', x86_64: 'android-x64' }[abi.trim()];
+  if (!target) throw new Error('Android acceptance supports ARM64 or x86_64 devices only');
   const defines = join(directory, 'defines.json');
   if (events) cross = await crossBrowser(fixture);
   const controlUrl = cross?.controlUrl ?? fixture.controlUrl;
@@ -63,7 +70,7 @@ try {
         'build',
         'apk',
         '--release',
-        '--target-platform=android-arm64',
+        `--target-platform=${target}`,
         '--target',
         restart ? 'lib/restart_acceptance.dart' : 'lib/release_acceptance.dart',
       ]
@@ -127,6 +134,7 @@ try {
     }
   }
 } finally {
+  await android('shell', 'am', 'force-stop', packageName).catch(() => {});
   if (failures || events)
     await android(
       'reverse',

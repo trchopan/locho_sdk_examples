@@ -7,7 +7,7 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-  locho_flutter: 0.1.0-beta.1
+  locho_flutter: 0.1.0-beta.3
   http: 1.6.0
   flutter_secure_storage: 10.0.0
 dev_dependencies:

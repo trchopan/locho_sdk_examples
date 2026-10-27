@@ -3,31 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 import 'package:locho_notes/main.dart';
 import 'package:locho_notes/session.dart';
-
-Future<void> until(WidgetTester tester, bool Function() ready) async {
-  final deadline = DateTime.now().add(const Duration(seconds: 45));
-  while (!ready()) {
-    if (DateTime.now().isAfter(deadline)) {
-      throw StateError('UI transition timeout');
-    }
-    await tester.pump(const Duration(milliseconds: 100));
-  }
-  await tester.pumpAndSettle();
-}
-
-Future<void> tap(WidgetTester tester, String text) async {
-  final target = find.text(text).last;
-  await tester.ensureVisible(target);
-  await tester.tap(target);
-  await tester.pump();
-}
-
-Future<void> enter(WidgetTester tester, String key, String value) async {
-  final target = find.byKey(ValueKey(key));
-  await tester.ensureVisible(target);
-  await tester.enterText(target, value);
-  await tester.pump();
-}
+import 'ui_helpers.dart';
 
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
@@ -54,8 +30,9 @@ void main() {
                 find.byKey(const ValueKey('Attachment ticket')),
               )
               .controller!
-              .text,
-          '',
+              .text
+              .isEmpty,
+          true,
         );
         await enter(tester, 'Email', 'alice@example.test');
         await enter(tester, 'Password', 'alice-local-demo-only');

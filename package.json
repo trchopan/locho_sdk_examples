@@ -27,6 +27,7 @@
     "test": "npm run test --workspaces && npm run contract:check",
     "contract:check": "node --import tsx scripts/check-contract.ts",
     "smoke:locho": "node --import tsx scripts/smoke-locho.ts",
+    "smoke:host-upgrade": "node scripts/smoke-host-upgrade.mjs",
     "check": "npm run lint && npm run format:check && npm run typecheck && npm run build && npm test"
   },
   "devDependencies": {

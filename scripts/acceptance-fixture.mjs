@@ -98,9 +98,13 @@ export async function acceptanceFixture(binary, { eventsTickMs = 100 } = {}) {
     incoming.pipe(upstream);
   });
   const config = join(directory, 'locho.toml');
+  let hostBinary = binary;
   const env = { ...process.env, LOCHO_STATE_DIR: join(directory, 'state') };
   async function startHost() {
-    host = spawn(binary, ['host', '--config', config], { env, stdio: ['ignore', 'pipe', 'pipe'] });
+    host = spawn(hostBinary, ['host', '--config', config], {
+      env,
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
     if (process.env.LOCHO_DIAGNOSTICS === '1') {
       host.stderr.on('data', (chunk) => {
         for (const line of chunk.toString().split('\n')) {
@@ -242,7 +246,23 @@ export async function acceptanceFixture(binary, { eventsTickMs = 100 } = {}) {
       { env, timeout: 20000 },
     );
     const controlPort = await listen(control);
-    return { ticket: stdout.trim(), controlUrl: `http://127.0.0.1:${controlPort}`, cleanup };
+    return {
+      ticket: stdout.trim(),
+      controlUrl: `http://127.0.0.1:${controlPort}`,
+      cleanup,
+      // Node-side migration probe only; never expose executable paths through
+      // the HTTP control endpoint. Preserve config, identity, capabilities and DB.
+      replaceHost(nextBinary) {
+        if (typeof nextBinary !== 'string' || !nextBinary) throw new Error('Host binary required');
+        const replacing = queue.then(async () => {
+          await stopHost();
+          hostBinary = nextBinary;
+          await startHost();
+        });
+        queue = replacing.catch(() => {});
+        return replacing;
+      },
+    };
   } catch (error) {
     await cleanup();
     throw error;

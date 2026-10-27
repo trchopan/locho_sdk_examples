@@ -1,6 +1,26 @@
 # Compatibility baseline
 
-## Browser registry beta.3 alignment — 2026-10-25
+## Coordinated native beta.3 alignment — 2026-10-26
+
+| Component | Current pin | Provenance |
+| --- | --- | --- |
+| Host CLI | `1.3.0-beta.3` | clean `0c8ad57cc91af30144138bd324aeca86604f48dd`; full SHA in CI/Compose |
+| Browser SDK | npm `locho_web@0.1.0-beta.3` (unchanged) | same clean release revision; npm lockfile integrity |
+| Flutter SDK | pub.dev `locho_flutter@0.1.0-beta.3` | same clean source/native revision; bundled-source build |
+
+Flutter archive SHA-256:
+`fcdad92b61204ed6ef3ead00fb5f46ea780a7263ee3f4465226d5ecc05faa735`.
+FRB stays 2.12.0, wire protocol 3 and ticket format 1. Both native releases include
+ctutils 0.4.4 for RUSTSEC-2026-0385; the beta.1 → beta.3 native upgrade also includes
+the cumulative iroh 1.4.0/lifecycle changes. No unrelated dependencies/toolchains
+or application authentication contracts are upgraded.
+
+See [native beta.3 acceptance](native-beta3-acceptance.md) for host identity/ticket
+upgrade-and-rollback verification, runtime/build results and remaining gates. The
+browser-only records below remain historical: PR #15's final/merged hosted browser,
+Flutter build and Compose/HTTPS jobs passed, but did not run Android integration tests.
+
+## Earlier browser registry beta.3 alignment — 2026-10-25
 
 The browser pins published `locho_web@0.1.0-beta.3` from npm, replacing the temporary
 metadata candidate. Its embedded build manifest records clean source commit
